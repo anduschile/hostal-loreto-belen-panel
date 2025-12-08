@@ -12,22 +12,47 @@ export type GetPaymentsParams = {
 // LECTURA (GET)
 // ==========================
 
+// Extendemos el tipo Payment para display en UI
+export type PaymentWithDetails = Payment & {
+  guest_name?: string;
+  company_name?: string;
+  billing_type?: string;
+};
+
 export async function getPayments(
   params: GetPaymentsParams = {}
-): Promise<Payment[]> {
+): Promise<PaymentWithDetails[]> {
   const supabase = createClient();
   const { fromDate, toDate } = params;
 
+  // Helper to get next day for inclusive query
+  function getNextDay(dateStr: string) {
+    const d = new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }
+
   let query = supabase
     .from(PAYMENTS_TABLE)
-    .select("*")
+    .select(`
+      *,
+      hostal_reservations (
+        id,
+        billing_type,
+        company_name_snapshot,
+        hostal_guests (full_name),
+        hostal_companies (name)
+      )
+    `)
     .order("payment_date", { ascending: false });
 
   if (fromDate) {
     query = query.gte("payment_date", fromDate);
   }
   if (toDate) {
-    query = query.lte("payment_date", toDate);
+    // Inclusive: < nextDay 00:00:00
+    const nextDay = getNextDay(toDate);
+    query = query.lt("payment_date", nextDay);
   }
 
   const { data, error } = await query;
@@ -37,7 +62,23 @@ export async function getPayments(
     throw new Error(error.message);
   }
 
-  return (data ?? []).map((row) => mapRowToPayment(row));
+  // Map results
+  return (data ?? []).map((row: any) => {
+    const p = mapRowToPayment(row);
+    // Extract relations
+    const res = row.hostal_reservations;
+    const guestName = res?.hostal_guests?.full_name || "Huésped Desconocido";
+    // Priority: snapshot -> linked company -> null
+    const companyName = res?.company_name_snapshot || res?.hostal_companies?.name || null;
+    const billingType = res?.billing_type || "particular";
+
+    return {
+      ...p,
+      guest_name: guestName,
+      company_name: companyName,
+      billing_type: billingType,
+    };
+  });
 }
 
 // ==========================

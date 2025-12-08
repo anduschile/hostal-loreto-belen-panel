@@ -29,6 +29,8 @@ export type CalendarReservation = {
     invoice_notes?: string | null;
     invoice_date?: string | null;
     companions_json?: any | null;
+    company_name_snapshot?: string | null;
+    billing_type?: string;
 };
 
 export type CalendarData = {
@@ -81,6 +83,7 @@ export async function getCalendarData(
       check_in, check_out, status, total_price, notes,
       adults, children, code, source,
       invoice_number, invoice_status, invoice_notes, invoice_date, companions_json,
+      company_name_snapshot, billing_type,
       hostal_guests ( full_name ),
       hostal_companies ( name )
     `
@@ -121,7 +124,7 @@ export async function getCalendarData(
         guest_id: r.guest_id,
         company_id: r.company_id,
         guest_name: r.hostal_guests?.full_name || "Sin Huésped",
-        company_name: r.hostal_companies?.name || null,
+        company_name: r.company_name_snapshot || r.hostal_companies?.name || null,
         check_in: r.check_in,
         check_out: r.check_out,
         status: r.status,
@@ -136,6 +139,8 @@ export async function getCalendarData(
         invoice_notes: r.invoice_notes,
         invoice_date: r.invoice_date,
         companions_json: r.companions_json,
+        company_name_snapshot: r.company_name_snapshot,
+        billing_type: r.billing_type,
     }));
 
     return { rooms, reservations };

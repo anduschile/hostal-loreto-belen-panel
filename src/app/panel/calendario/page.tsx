@@ -4,6 +4,10 @@ import { startOfWeek, endOfWeek, format } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Calendario de Reservas",
+};
+
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 import { getRooms } from "@/lib/data/rooms";

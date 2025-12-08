@@ -32,6 +32,11 @@ type ReservationDbPayload = {
   companions_json?: any | null;
   arrival_time?: string | null;
   breakfast_time?: string | null;
+  company_name_snapshot?: string | null;
+  billing_type?: string;
+  discount_type_snapshot?: string | null;
+  discount_value_snapshot?: number | null;
+  credit_days_snapshot?: number | null;
 };
 
 function mapToDb(input: any): ReservationDbPayload {
@@ -59,6 +64,11 @@ function mapToDb(input: any): ReservationDbPayload {
     companions_json: input.companions_json ?? null,
     arrival_time: input.arrival_time ?? null,
     breakfast_time: input.breakfast_time ?? null,
+    company_name_snapshot: input.company_name_snapshot ?? null,
+    billing_type: input.billing_type ?? 'particular',
+    discount_type_snapshot: input.discount_type_snapshot ?? null,
+    discount_value_snapshot: input.discount_value_snapshot ?? null,
+    credit_days_snapshot: input.credit_days_snapshot ?? null,
   };
 
   // Solo tocamos code si viene en el payload
@@ -104,6 +114,11 @@ export async function getReservations(filters: ReservationFilters = {}) {
       companions_json,
       arrival_time,
       breakfast_time,
+      company_name_snapshot,
+      billing_type,
+      discount_type_snapshot,
+      discount_value_snapshot,
+      credit_days_snapshot,
       hostal_rooms ( id, name, room_type, code ),
       hostal_guests ( id, full_name, phone, email, document_id ),
       hostal_companies ( id, name )
@@ -177,6 +192,11 @@ export async function getReservationById(id: number) {
       companions_json,
       arrival_time,
       breakfast_time,
+      company_name_snapshot,
+      billing_type,
+      discount_type_snapshot,
+      discount_value_snapshot,
+      credit_days_snapshot,
       hostal_rooms ( id, name, room_type, code ),
       hostal_guests ( id, full_name, phone, email, document_id ),
       hostal_companies ( id, name )

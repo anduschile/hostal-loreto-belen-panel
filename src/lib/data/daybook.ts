@@ -26,6 +26,11 @@ export type DaybookEntry = {
     companions_json?: any | null;
     arrival_time?: string | null;
     breakfast_time?: string | null;
+    billing_type?: string;
+    // Snapshots for display
+    discount_type_snapshot?: string | null;
+    discount_value_snapshot?: number | null;
+    credit_days_snapshot?: number | null;
 };
 
 // ==========================
@@ -50,6 +55,8 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
       id, room_id, guest_id, company_id, check_in, check_out, status, total_price,
       invoice_status, invoice_number, invoice_date, notes, adults, children, source, companions_json,
       arrival_time, breakfast_time,
+      company_name_snapshot, billing_type,
+      discount_type_snapshot, discount_value_snapshot, credit_days_snapshot,
       hostal_rooms (name, room_type, sort_order),
       hostal_guests (full_name),
       hostal_companies (name)
@@ -70,7 +77,7 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
         room_name: row.hostal_rooms?.name || `Hab ${row.room_id}`,
         room_type: row.hostal_rooms?.room_type || "Estándar",
         guest_name: row.hostal_guests?.full_name || "Sin Huésped",
-        company_name: row.hostal_companies?.name || null,
+        company_name: row.company_name_snapshot || row.hostal_companies?.name || null,
         check_in: row.check_in,
         check_out: row.check_out,
         status: row.status,
@@ -88,6 +95,10 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
         companions_json: row.companions_json,
         arrival_time: row.arrival_time,
         breakfast_time: row.breakfast_time,
+        billing_type: row.billing_type,
+        discount_type_snapshot: row.discount_type_snapshot,
+        discount_value_snapshot: row.discount_value_snapshot,
+        credit_days_snapshot: row.credit_days_snapshot,
         // Internal for sorting
         _sort_order: row.hostal_rooms?.sort_order ?? 999
     }));

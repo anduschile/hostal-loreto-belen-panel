@@ -79,6 +79,10 @@ export default function ReservationFormModal({
     const [formGuestSearch, setFormGuestSearch] = useState("");
     const [formCompanyId, setFormCompanyId] = useState("");
 
+    // NEW: Billing Type & Companies
+    const [formBillingType, setFormBillingType] = useState("particular");
+    const [companies, setCompanies] = useState<any[]>([]);
+
     const [formCheckIn, setFormCheckIn] = useState("");
     const [formCheckOut, setFormCheckOut] = useState("");
 
@@ -116,6 +120,11 @@ export default function ReservationFormModal({
     const [isSendingEmail, setIsSendingEmail] = useState(false);
 
     // --- COMPUTED ---
+    const selectedCompanyData = useMemo(() => {
+        if (!formCompanyId) return null;
+        return companies.find(c => String(c.id) === String(formCompanyId)) || null;
+    }, [companies, formCompanyId]);
+
     const nights = useMemo(() => {
         if (!formCheckIn || !formCheckOut) return 0;
         const diff = differenceInDays(parseISO(formCheckOut), parseISO(formCheckIn));
@@ -136,6 +145,18 @@ export default function ReservationFormModal({
 
     // --- EFFECT: Load Data ---
     useEffect(() => {
+        // Fetch companies
+        const loadCompanies = async () => {
+            const res = await fetch("/api/companies");
+            if (res.ok) {
+                const data = await res.json();
+                // Filter active companies or show all if editing and the company is inactive?
+                // For now, let's just show active ones + the one currently selected if inactive
+                setCompanies(data.filter((c: any) => c.is_active));
+            }
+        };
+        loadCompanies();
+
         if (!isOpen) return;
 
         if (reservationToEdit) {
@@ -150,6 +171,13 @@ export default function ReservationFormModal({
             setFormGuestSearch(guestName);
 
             setFormCompanyId(r.company_id ? String(r.company_id) : "");
+
+            // Set billing type based on explicit field or fall back to company check
+            if (r.billing_type) {
+                setFormBillingType(r.billing_type);
+            } else {
+                setFormBillingType(r.company_id ? 'empresa' : 'particular');
+            }
             setFormCheckIn(r.check_in);
             setFormCheckOut(r.check_out);
             setFormStatus(r.status);
@@ -339,6 +367,12 @@ export default function ReservationFormModal({
             source: formSource,
             arrival_time: formArrivalTime || null,
             breakfast_time: formBreakfastTime || null,
+
+            // Snapshots
+            company_name_snapshot: selectedCompanyData?.name || null,
+            billing_type: formBillingType,
+            discount_type_snapshot: selectedCompanyData?.discount_type || null,
+            discount_value_snapshot: selectedCompanyData?.discount_value || null,
         };
 
         const rAny: any = reservationToEdit;
@@ -581,7 +615,7 @@ export default function ReservationFormModal({
                                 <h4 className="flex items-center gap-2 text-sm font-bold text-blue-600 uppercase tracking-wider mb-4 border-b pb-2">
                                     <User size={16} /> Titular
                                 </h4>
-                                <div className="grid grid-cols-1 gap-6">
+                                <div className="grid grid-cols-1 gap-6 mb-6">
                                     <div>
                                         <label className="block text-sm font-medium mb-1 text-gray-700">
                                             Buscar Huésped *
@@ -651,20 +685,72 @@ export default function ReservationFormModal({
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium mb-1 text-gray-700">
-                                                ID Empresa (Opcional)
+                                </div>
+
+                                {/* BILLING TYPE & COMPANY */}
+                                <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2 text-gray-700">Tipo de Cliente</label>
+                                        <div className="flex gap-4">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="billingType"
+                                                    value="particular"
+                                                    checked={formBillingType === 'particular'}
+                                                    onChange={() => {
+                                                        setFormBillingType('particular');
+                                                        setFormCompanyId("");
+                                                    }}
+                                                    className="text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span className="text-sm">Particular</span>
                                             </label>
-                                            <input
-                                                type="number"
-                                                placeholder="Ej: ID 5"
-                                                value={formCompanyId}
-                                                onChange={(e) => setFormCompanyId(e.target.value)}
-                                                className="w-full border p-2.5 rounded-lg"
-                                            />
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="billingType"
+                                                    value="empresa"
+                                                    checked={formBillingType === 'empresa'}
+                                                    onChange={() => setFormBillingType('empresa')}
+                                                    className="text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <span className="text-sm">Empresa / Convenio</span>
+                                            </label>
                                         </div>
                                     </div>
+
+                                    {formBillingType === 'empresa' && (
+                                        <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <label className="block text-sm font-medium mb-1 text-gray-700">
+                                                Seleccionar Empresa
+                                            </label>
+                                            <select
+                                                value={formCompanyId}
+                                                onChange={(e) => setFormCompanyId(e.target.value)}
+                                                className="w-full border p-2.5 rounded-lg border-gray-300 bg-white"
+                                            >
+                                                <option value="">-- Seleccione Empresa --</option>
+                                                {companies.map(c => (
+                                                    <option key={c.id} value={c.id}>
+                                                        {c.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {selectedCompanyData && (
+                                                <div className="mt-2 text-xs text-blue-700 bg-blue-50 p-2 rounded border border-blue-100">
+                                                    <strong>Convenio:</strong>{' '}
+                                                    {selectedCompanyData.discount_type === 'porcentaje'
+                                                        ? `${selectedCompanyData.discount_value}% de descuento`
+                                                        : selectedCompanyData.discount_type === 'monto_fijo'
+                                                            ? `$${selectedCompanyData.discount_value} de descuento`
+                                                            : 'Sin descuento especial'
+                                                    }
+                                                    {selectedCompanyData.credit_days > 0 && ` • Crédito: ${selectedCompanyData.credit_days} días`}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </section>
 
@@ -970,64 +1056,66 @@ export default function ReservationFormModal({
                             </button>
                         </div>
                     </div>
-                </form>
-            </div>
+                </form >
+            </div >
 
             {/* QUICK CREATE GUEST SUB-MODAL */}
-            {isGuestModalOpen && (
-                <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm border-2 border-blue-100">
-                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
-                            <User size={20} /> Nuevo Huésped
-                        </h4>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">
-                                    Nombre Completo *
-                                </label>
-                                <input
-                                    type="text"
-                                    className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                    autoFocus
-                                    value={newGuestName}
-                                    onChange={(e) => setNewGuestName(e.target.value)}
-                                    placeholder="Ej: Juan Pérez"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">
-                                    Email (Opcional)
-                                </label>
-                                <input
-                                    type="email"
-                                    className="w-full border p-2.5 rounded-lg"
-                                    value={newGuestEmail}
-                                    onChange={(e) => setNewGuestEmail(e.target.value)}
-                                    placeholder="juan@email.com"
-                                />
-                            </div>
-                            <div className="flex justify-end gap-2 pt-4">
-                                <button
-                                    onClick={() => setIsGuestModalOpen(false)}
-                                    type="button"
-                                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
-                                    disabled={isCreatingGuest}
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleCreateGuest}
-                                    type="button"
-                                    disabled={isCreatingGuest}
-                                    className="px-4 py-1.5 text-sm bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:opacity-60"
-                                >
-                                    {isCreatingGuest ? "Creando..." : "Crear y Usar"}
-                                </button>
+            {
+                isGuestModalOpen && (
+                    <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm border-2 border-blue-100">
+                            <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <User size={20} /> Nuevo Huésped
+                            </h4>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">
+                                        Nombre Completo *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        autoFocus
+                                        value={newGuestName}
+                                        onChange={(e) => setNewGuestName(e.target.value)}
+                                        placeholder="Ej: Juan Pérez"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">
+                                        Email (Opcional)
+                                    </label>
+                                    <input
+                                        type="email"
+                                        className="w-full border p-2.5 rounded-lg"
+                                        value={newGuestEmail}
+                                        onChange={(e) => setNewGuestEmail(e.target.value)}
+                                        placeholder="juan@email.com"
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-4">
+                                    <button
+                                        onClick={() => setIsGuestModalOpen(false)}
+                                        type="button"
+                                        className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
+                                        disabled={isCreatingGuest}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleCreateGuest}
+                                        type="button"
+                                        disabled={isCreatingGuest}
+                                        className="px-4 py-1.5 text-sm bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:opacity-60"
+                                    >
+                                        {isCreatingGuest ? "Creando..." : "Crear y Usar"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }

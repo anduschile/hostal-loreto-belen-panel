@@ -3,6 +3,10 @@ import DaybookClient from "./DaybookClient";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+    title: "Libro del Día",
+};
+
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 export default async function DaybookPage(props: {

@@ -34,6 +34,9 @@ export interface Company {
   email?: string | null;
   notes?: string | null;
   is_active?: boolean | null;
+  credit_days: number;
+  discount_type: 'porcentaje' | 'monto_fijo' | 'ninguno';
+  discount_value: number;
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +71,7 @@ export interface HousekeepingEntry {
   created_at: string;
   updated_at: string;
 }
+
 export type PaymentMethod =
   | "efectivo"
   | "transferencia"
@@ -121,9 +125,17 @@ export interface Reservation {
   children: number;
   source: string;
   code: string;
-  companions_json?: any | null; // JSONB
+  companions_json?: any | null; // JSONB null
   arrival_time?: string | null;
   breakfast_time?: string | null;
+
+  // Snapshots
+  company_name_snapshot?: string | null;
+  billing_type: string; // 'particular' | 'empresa'
+  discount_type_snapshot?: string | null;
+  discount_value_snapshot?: number | null;
+  credit_days_snapshot?: number | null;
+
   created_at: string;
   updated_at: string;
 }
@@ -148,6 +160,13 @@ export interface ReservationInsert {
   companions_json?: any | null;
   arrival_time?: string | null;
   breakfast_time?: string | null;
+
+  // Snapshots
+  company_name_snapshot?: string | null;
+  billing_type?: string;
+  discount_type_snapshot?: string | null;
+  discount_value_snapshot?: number | null;
+  credit_days_snapshot?: number | null;
 }
 
 export interface RoomInsert {

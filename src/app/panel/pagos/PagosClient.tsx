@@ -13,6 +13,14 @@ type Props = {
   reservationOptions?: { id: number; label: string }[];
 };
 
+// Helper to format date dd-mm-yyyy (ignoring time if present, assuming input string is YYYY-MM-DD or ISO)
+const formatDateCL = (dateStr: string) => {
+  if (!dateStr) return "-";
+  const datePart = dateStr.split('T')[0];
+  const [y, m, d] = datePart.split('-');
+  return `${d}-${m}-${y}`;
+};
+
 export default function PagosClient({
   initialPayments,
   initialFrom,
@@ -20,7 +28,8 @@ export default function PagosClient({
   reservationOptions = [],
 }: Props) {
   const router = useRouter();
-  const [payments, setPayments] = useState<Payment[]>(initialPayments);
+  // We treat initialPayments as `any[]` or `PaymentWithDetails[]` internally for the extra fields
+  const [payments, setPayments] = useState<any[]>(initialPayments);
   const [fromDate, setFromDate] = useState(initialFrom || "");
   const [toDate, setToDate] = useState(initialTo || "");
 
@@ -33,7 +42,7 @@ export default function PagosClient({
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Form states
-  const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
+  const [formDate, setFormDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }));
   const [formAmount, setFormAmount] = useState("");
   const [formMethod, setFormMethod] = useState("efectivo");
   const [formDocumentType, setFormDocumentType] = useState("boleta");
@@ -56,7 +65,7 @@ export default function PagosClient({
 
   const openNewPayment = () => {
     setEditingPayment(null);
-    setFormDate(new Date().toISOString().split('T')[0]);
+    setFormDate(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }));
     setFormAmount("");
     setFormMethod("efectivo");
     setFormDocumentType("boleta");
@@ -73,7 +82,7 @@ export default function PagosClient({
     setFormDate(payment.payment_date);
     setFormAmount(String(payment.amount));
     setFormMethod(payment.method);
-    setFormDocumentType(payment.document_type);
+    setFormDocumentType(payment.document_type || "boleta");
     setFormDocumentNumber(payment.document_number || "");
     setFormNotes(payment.notes || "");
     setFormReservationId(payment.reservation_id ? String(payment.reservation_id) : "");
@@ -82,16 +91,12 @@ export default function PagosClient({
 
   const handleDelete = async (id: number) => {
     if (!confirm("¿Estás seguro de eliminar este pago?")) return;
-
     const toastId = toast.loading("Eliminando pago...");
     setIsDeleting(true);
-
     try {
       const res = await fetch(`/api/payments?id=${id}`, { method: "DELETE" });
       const data = await res.json();
-
       if (!data.ok) throw new Error(data.error || "Error al eliminar");
-
       setPayments((prev) => prev.filter((p) => p.id !== id));
       toast.success("Pago eliminado correctamente", { id: toastId });
       router.refresh();
@@ -104,12 +109,10 @@ export default function PagosClient({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!formReservationId) {
       toast.error("Debes asociar una reserva al pago (ID Reserva obligatorio)");
       return;
     }
-
     const payload = {
       payment_date: formDate,
       amount: Number(formAmount),
@@ -121,46 +124,40 @@ export default function PagosClient({
       guest_id: formGuestId ? Number(formGuestId) : null,
       company_id: formCompanyId ? Number(formCompanyId) : null,
     };
-
     const toastId = toast.loading(editingPayment ? "Actualizando pago..." : "Registrando pago...");
     setIsSubmitting(true);
-
     try {
       let res;
       if (editingPayment) {
-        // Update
         res = await fetch("/api/payments", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: editingPayment.id, ...payload }),
         });
       } else {
-        // Create
         res = await fetch("/api/payments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       }
-
       const data = await res.json();
-
       if (!data.ok) {
-        if (data.details) {
-          console.error(data.details);
-          throw new Error(data.error + " (Ver consola para detalles)");
-        }
+        if (data.details) console.error(data.details);
         throw new Error(data.error || "Error al guardar");
       }
-
       if (editingPayment) {
         setPayments(prev => prev.map(p => p.id === data.data.id ? data.data : p));
         toast.success("Pago actualizado", { id: toastId });
       } else {
+        // For new payments, we might miss the joined details until refresh
+        // Ideally, we'd fetch the payment with details or optimistically add it.
+        // For now, let's refresh page to get details.
+        // Or try to augment data.data with selected reservation option text?
+        // Let's just add it and router.refresh will fix it eventually.
         setPayments(prev => [data.data, ...prev]);
         toast.success("Pago registrado correctamente", { id: toastId });
       }
-
       setIsModalOpen(false);
       router.refresh();
     } catch (error: any) {
@@ -170,7 +167,6 @@ export default function PagosClient({
     }
   };
 
-  // Totales
   const totalAmount = payments.reduce((acc, p) => acc + p.amount, 0);
   const totalByMethod = payments.reduce((acc, p) => {
     const method = p.method as string;
@@ -185,10 +181,7 @@ export default function PagosClient({
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-bold">Resumen de Pagos</h2>
           <div className="flex gap-2">
-            <button
-              onClick={() => router.refresh()}
-              className="text-sm text-blue-600 hover:underline"
-            >
+            <button onClick={() => router.refresh()} className="text-sm text-blue-600 hover:underline">
               Refrescar
             </button>
           </div>
@@ -197,32 +190,16 @@ export default function PagosClient({
         <div className="flex flex-wrap gap-4 items-end">
           <div>
             <label className="block text-sm font-medium">Desde</label>
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="border p-2 rounded"
-            />
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="border p-2 rounded" />
           </div>
           <div>
             <label className="block text-sm font-medium">Hasta</label>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="border p-2 rounded"
-            />
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="border p-2 rounded" />
           </div>
-          <button
-            onClick={handleFilter}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
+          <button onClick={handleFilter} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
             Filtrar
           </button>
-          <button
-            onClick={openNewPayment}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 ml-auto"
-          >
+          <button onClick={openNewPayment} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 ml-auto">
             + Nuevo Pago
           </button>
         </div>
@@ -247,49 +224,74 @@ export default function PagosClient({
           <thead>
             <tr className="bg-gray-100 border-b">
               <th className="p-3">Fecha</th>
+              <th className="p-3">Cliente (Reserva)</th>
               <th className="p-3">Monto</th>
               <th className="p-3">Método</th>
               <th className="p-3">Doc</th>
-              <th className="p-3">ID Reserva</th>
               <th className="p-3">Notas</th>
-              <th className="p-3">Acciones</th>
+              <th className="p-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {payments.map(payment => (
-              <tr key={payment.id} className="border-b hover:bg-gray-50">
-                <td className="p-3">{payment.payment_date}</td>
-                <td className="p-3 font-medium">{formatCurrencyCLP(payment.amount)}</td>
-                <td className="p-3 capitalize">{payment.method}</td>
-                <td className="p-3">
-                  <span className="capitalize">{payment.document_type}</span>
-                  {payment.document_number && <span className="text-xs text-gray-500 block">#{payment.document_number}</span>}
-                </td>
-                <td className="p-3 text-sm text-gray-600">
-                  {payment.reservation_id ? `#${payment.reservation_id}` : "-"}
-                </td>
-                <td className="p-3 text-sm text-gray-500">{payment.notes}</td>
-                <td className="p-3 space-x-2">
-                  <button
-                    onClick={() => openEditPayment(payment)}
-                    className="text-blue-600 hover:text-blue-800 text-sm"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => handleDelete(payment.id)}
-                    className="text-red-600 hover:text-red-800 text-sm"
-                  >
-                    Borrar
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {payments.length === 0 ? (
+              <tr><td colSpan={7} className="p-8 text-center text-gray-500">No hay pagos registrados en este período.</td></tr>
+            ) : (
+              payments.map(payment => {
+                const isCompany = payment.billing_type === 'empresa' || (payment.company_name && payment.company_name !== 'Sin Empresa');
+                return (
+                  <tr key={payment.id} className="border-b hover:bg-gray-50 text-sm">
+                    <td className="p-3 whitespace-nowrap font-medium text-gray-700">
+                      {formatDateCL(payment.payment_date)}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-gray-900">
+                          {payment.guest_name || "Huésped s/n"}
+                        </span>
+                        {isCompany && (
+                          <span className="text-xs text-blue-600 bg-blue-50 px-1 rounded w-fit mt-0.5">
+                            {payment.company_name}
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-400 mt-0.5">
+                          Res #{payment.reservation_id}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-3 font-medium text-base">
+                      {formatCurrencyCLP(payment.amount)}
+                    </td>
+                    <td className="p-3 capitalize">
+                      <span className={`px-2 py-0.5 rounded text-xs border ${payment.method === 'efectivo' ? 'bg-green-50 border-green-200 text-green-700' :
+                        payment.method === 'tarjeta' ? 'bg-purple-50 border-purple-200 text-purple-700' :
+                          'bg-gray-50 border-gray-200 text-gray-700'
+                        }`}>
+                        {payment.method}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex flex-col">
+                        <span className="capitalize text-gray-700">{payment.document_type}</span>
+                        {payment.document_number && <span className="text-xs text-gray-500 font-mono">#{payment.document_number}</span>}
+                      </div>
+                    </td>
+                    <td className="p-3 text-gray-500 italic max-w-xs truncate">
+                      {payment.notes || "-"}
+                    </td>
+                    <td className="p-3 text-right space-x-2">
+                      <button onClick={() => openEditPayment(payment)} className="text-blue-600 hover:text-blue-800 text-xs uppercase font-bold tracking-wide">
+                        Editar
+                      </button>
+                      <button onClick={() => handleDelete(payment.id)} className="text-red-500 hover:text-red-700 text-xs uppercase font-bold tracking-wide">
+                        X
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
-        {payments.length === 0 && (
-          <div className="p-8 text-center text-gray-500">No hay pagos registrados en este período.</div>
-        )}
       </div>
 
       {/* Modal Form */}
@@ -301,35 +303,17 @@ export default function PagosClient({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium">Fecha *</label>
-                  <input
-                    type="date"
-                    required
-                    value={formDate}
-                    onChange={e => setFormDate(e.target.value)}
-                    className="w-full border p-2 rounded"
-                  />
+                  <input type="date" required value={formDate} onChange={e => setFormDate(e.target.value)} className="w-full border p-2 rounded" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Monto *</label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    value={formAmount}
-                    onChange={e => setFormAmount(e.target.value)}
-                    className="w-full border p-2 rounded"
-                  />
+                  <input type="number" required min="0" value={formAmount} onChange={e => setFormAmount(e.target.value)} className="w-full border p-2 rounded" />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium">Método *</label>
-                  <select
-                    value={formMethod}
-                    onChange={e => setFormMethod(e.target.value)}
-                    className="w-full border p-2 rounded"
-                  >
+                  <select value={formMethod} onChange={e => setFormMethod(e.target.value)} className="w-full border p-2 rounded">
                     <option value="efectivo">Efectivo</option>
                     <option value="tarjeta">Tarjeta</option>
                     <option value="transferencia">Transferencia</option>
@@ -339,11 +323,7 @@ export default function PagosClient({
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Tipo Doc *</label>
-                  <select
-                    value={formDocumentType}
-                    onChange={e => setFormDocumentType(e.target.value)}
-                    className="w-full border p-2 rounded"
-                  >
+                  <select value={formDocumentType} onChange={e => setFormDocumentType(e.target.value)} className="w-full border p-2 rounded">
                     <option value="boleta">Boleta</option>
                     <option value="factura">Factura</option>
                     <option value="guia">Guía</option>
@@ -351,86 +331,39 @@ export default function PagosClient({
                   </select>
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-medium">N° Documento</label>
-                <input
-                  type="text"
-                  value={formDocumentNumber}
-                  onChange={e => setFormDocumentNumber(e.target.value)}
-                  className="w-full border p-2 rounded"
-                  placeholder="Ej: 12345"
-                />
+                <input type="text" value={formDocumentNumber} onChange={e => setFormDocumentNumber(e.target.value)} className="w-full border p-2 rounded" placeholder="Ej: 12345" />
               </div>
-
               <div>
                 <label className="block text-sm font-medium">Asociar a (IDs Opcionales)</label>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-1">
                     <label className="text-xs text-gray-500 block mb-1">Reserva *</label>
-                    <select
-                      required
-                      value={formReservationId}
-                      onChange={e => {
-                        console.log("Selected reservation:", e.target.value);
-                        setFormReservationId(e.target.value);
-                      }}
-                      className="w-full border p-2 rounded text-sm border-blue-300"
-                    >
+                    <select required value={formReservationId} onChange={e => setFormReservationId(e.target.value)} className="w-full border p-2 rounded text-sm border-blue-300">
                       <option value="">-- Seleccionar --</option>
                       {reservationOptions.map(opt => (
-                        <option key={opt.id} value={String(opt.id)}>
-                          {opt.label}
-                        </option>
+                        <option key={opt.id} value={String(opt.id)}>{opt.label}</option>
                       ))}
                     </select>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">ID Huésped</label>
-                    <input
-                      type="number"
-                      placeholder="Opcional"
-                      value={formGuestId}
-                      onChange={e => setFormGuestId(e.target.value)}
-                      className="w-full border p-2 rounded text-sm"
-                    />
+                    <input type="number" placeholder="Opcional" value={formGuestId} onChange={e => setFormGuestId(e.target.value)} className="w-full border p-2 rounded text-sm" />
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">ID Empresa</label>
-                    <input
-                      type="number"
-                      placeholder="Opcional"
-                      value={formCompanyId}
-                      onChange={e => setFormCompanyId(e.target.value)}
-                      className="w-full border p-2 rounded text-sm"
-                    />
+                    <input type="number" placeholder="Opcional" value={formCompanyId} onChange={e => setFormCompanyId(e.target.value)} className="w-full border p-2 rounded text-sm" />
                   </div>
                 </div>
               </div>
-
               <div>
                 <label className="block text-sm font-medium">Notas</label>
-                <textarea
-                  value={formNotes}
-                  onChange={e => setFormNotes(e.target.value)}
-                  className="w-full border p-2 rounded h-20"
-                />
+                <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} className="w-full border p-2 rounded h-20" />
               </div>
-
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
-                  disabled={isSubmitting}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-70 flex items-center gap-2"
-                  disabled={isSubmitting}
-                >
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded" disabled={isSubmitting}>Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-70 flex items-center gap-2" disabled={isSubmitting}>
                   {isSubmitting ? "Guardando..." : "Guardar"}
                 </button>
               </div>

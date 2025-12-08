@@ -4,9 +4,39 @@ import "./globals.css";
 import { ToasterProvider } from "@/components/ui/ToasterProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+  ? process.env.NEXT_PUBLIC_APP_URL
+  : (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000");
+
 export const metadata: Metadata = {
-  title: "Panel Hostal Loreto Belén",
-  description: "Sistema de gestión de reservas para Hostal Loreto Belén",
+  metadataBase: new URL(baseUrl),
+  title: {
+    default: "Panel Hostal Loreto Belén",
+    template: "%s | Panel Hostal Loreto Belén",
+  },
+  description: "Sistema de gestión de reservas, convenios corporativos y control financiero del Hostal Loreto Belén.",
+  openGraph: {
+    title: "Panel Hostal Loreto Belén",
+    description: "Sistema de gestión de reservas, convenios corporativos y control financiero.",
+    siteName: "Hostal Loreto Belén",
+    locale: "es_CL",
+    type: "website",
+    images: [
+      {
+        url: "/og-hostal-loreto-belen.png",
+        width: 1200,
+        height: 630,
+        alt: "Hostal Loreto Belén - Panel de Administración",
+      },
+    ],
+  },
+  icons: {
+    icon: "/icon.svg",
+    // Si tuvieramos apple touch icon:
+    // apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({

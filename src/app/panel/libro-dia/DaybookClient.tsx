@@ -169,10 +169,29 @@ export default function DaybookClient({ initialDate, entries }: Props) {
                             <h3 className="font-bold text-gray-900 line-clamp-1 text-base">
                                 {r.guest_name || "Sin Huésped"}
                             </h3>
-                            {/* EMPRESA */}
-                            <p className="text-xs text-gray-500 font-medium">
-                                {r.company_name ? `Empresa: ${r.company_name}` : "Particular"}
-                            </p>
+                            {/* EMPRESA & CONVENIO */}
+                            {r.billing_type === 'empresa' ? (
+                                <div className="mt-0.5">
+                                    <p className="text-xs text-blue-700 font-bold flex items-center gap-1">
+                                        Empresa: {r.company_name}
+                                    </p>
+                                    <p className="text-[10px] text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded inline-block mt-0.5">
+                                        {/* DISCOUNT */}
+                                        {r.discount_type_snapshot === 'porcentaje' && `Desc: ${r.discount_value_snapshot}%`}
+                                        {r.discount_type_snapshot === 'monto_fijo' && `Desc: $${r.discount_value_snapshot}`}
+                                        {(!r.discount_type_snapshot || r.discount_type_snapshot === 'ninguno') && 'Sin descuento'}
+
+                                        {/* CRÉDITO */}
+                                        <span className="mx-1">•</span>
+                                        {r.credit_days_snapshot && r.credit_days_snapshot > 0
+                                            ? `Crédito: ${r.credit_days_snapshot} días`
+                                            : 'Contado'
+                                        }
+                                    </p>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-gray-500 font-medium">Particular</p>
+                            )}
                         </div>
                         <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${r.status === "confirmed" ? "bg-green-50 border-green-200 text-green-700" :
                             r.status === "checked_in" ? "bg-blue-50 border-blue-200 text-blue-700" :
