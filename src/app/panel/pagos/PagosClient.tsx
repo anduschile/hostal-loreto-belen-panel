@@ -8,14 +8,16 @@ import { toast } from "sonner";
 
 type Props = {
   initialPayments: Payment[];
-  initialFrom?: string;
   initialTo?: string;
+  initialFrom?: string;
+  reservationOptions?: { id: number; label: string }[];
 };
 
 export default function PagosClient({
   initialPayments,
   initialFrom,
   initialTo,
+  reservationOptions = [],
 }: Props) {
   const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>(initialPayments);
@@ -364,16 +366,24 @@ export default function PagosClient({
               <div>
                 <label className="block text-sm font-medium">Asociar a (IDs Opcionales)</label>
                 <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">ID Reserva *</label>
-                    <input
-                      type="number"
+                  <div className="col-span-1">
+                    <label className="text-xs text-gray-500 block mb-1">Reserva *</label>
+                    <select
                       required
-                      placeholder="Req *"
                       value={formReservationId}
-                      onChange={e => setFormReservationId(e.target.value)}
+                      onChange={e => {
+                        console.log("Selected reservation:", e.target.value);
+                        setFormReservationId(e.target.value);
+                      }}
                       className="w-full border p-2 rounded text-sm border-blue-300"
-                    />
+                    >
+                      <option value="">-- Seleccionar --</option>
+                      {reservationOptions.map(opt => (
+                        <option key={opt.id} value={String(opt.id)}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">ID Huésped</label>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { HostalRoom } from "@/types/hostal";
 import RoomCard from "./RoomCard";
 import RoomFormModal from "@/components/habitaciones/RoomFormModal";
+import { toast } from "sonner";
 
 type Props = {
     initialRooms: HostalRoom[];
@@ -49,7 +50,36 @@ export default function RoomsGrid({ initialRooms }: Props) {
             }
         } catch (err) {
             console.error(err);
-            // Si quieres, podríamos recargar o revertir, pero por ahora solo log
+            toast.error("Error al actualizar estado");
+        }
+    };
+
+    const handleDeleteRoom = async (id: number) => {
+        if (!confirm("¿Eliminar esta habitación? Esta acción es irreversible.")) return;
+
+        const toastId = toast.loading("Eliminando habitación...");
+
+        try {
+            const res = await fetch(`/api/rooms?id=${id}`, { method: "DELETE" });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || res.statusText || "Error al eliminar");
+            }
+
+            setRooms((prev) => prev.filter((r) => r.id !== id));
+            toast.success("Habitación eliminada correctamente", { id: toastId });
+
+            setIsModalOpen(false);
+            setEditingRoom(null);
+        } catch (e: any) {
+            console.error(e);
+            let msg = "No se pudo eliminar la habitación";
+            // Check for specific keywords typically returned by Supabase/Postgres
+            // or if we threw it ourselves with response text
+            if (e.message?.includes("foreign key") || e.message?.includes("constraint") || e.message?.includes("reservas")) {
+                msg = "No es posible eliminar esta habitación porque tiene reservas asociadas. Usa el estado 'Archivada'.";
+            }
+            toast.error(msg, { id: toastId, duration: 5000 });
         }
     };
 
@@ -106,9 +136,10 @@ export default function RoomsGrid({ initialRooms }: Props) {
 
             setIsModalOpen(false);
             setEditingRoom(null);
+            toast.success(payload.id ? "Habitación actualizada" : "Habitación creada");
         } catch (err) {
             console.error(err);
-            alert("No se pudo guardar la habitación. Revisa la consola.");
+            toast.error("No se pudo guardar la habitación");
         } finally {
             setSaving(false);
         }
@@ -158,6 +189,7 @@ export default function RoomsGrid({ initialRooms }: Props) {
                 room={editingRoom}
                 onClose={closeModal}
                 onSave={handleSaveRoom}
+                onDelete={editingRoom ? () => handleDeleteRoom(editingRoom.id) : undefined}
                 saving={saving}
             />
         </div>

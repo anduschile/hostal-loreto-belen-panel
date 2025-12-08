@@ -1,9 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Trash2 } from "lucide-react";
+import { Trash2, Edit2 } from "lucide-react";
+import ReservationFormModal from "@/components/reservations/ReservationFormModal";
+import { HostalRoom, Guest } from "@/types/hostal";
 
 type Reservation = {
     id: number;
@@ -23,9 +26,11 @@ type Reservation = {
 type Props = {
     initialReservations: Reservation[];
     today: string; // "YYYY-MM-DD"
+    rooms: HostalRoom[];
+    guests: Guest[];
 };
 
-function parseDateSafe(value: string): Date | null {
+function parseDateSafe(value: string | undefined): Date | null {
     if (!value) return null;
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
@@ -44,12 +49,17 @@ function overlapsRange(res: Reservation, from: string, to: string): boolean {
     return checkIn <= toDate && checkOut >= fromDate;
 }
 
-export default function ReservasList({ initialReservations, today }: Props) {
+export default function ReservasList({ initialReservations, today, rooms, guests }: Props) {
+    const router = useRouter();
     const [from, setFrom] = useState<string>(today);
     const [to, setTo] = useState<string>(today);
     const [reservations, setReservations] =
         useState<Reservation[]>(initialReservations);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+
+    // Modal state
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingReservation, setEditingReservation] = useState<any>(null); // Ussing any to avoid strict type mismatch with existing partial type
 
     // Filtro en memoria
     const filtered = useMemo(() => {
@@ -87,11 +97,29 @@ export default function ReservasList({ initialReservations, today }: Props) {
             if (!json.ok) throw new Error(json.error || "Error al eliminar");
 
             setReservations((prev) => prev.filter((r) => r.id !== id));
+            router.refresh();
         } catch (e: any) {
             alert(e.message || "Error al eliminar la reserva");
         } finally {
             setDeletingId(null);
         }
+    };
+
+    const handleEdit = (res: Reservation) => {
+        setEditingReservation(res);
+        setIsModalOpen(true);
+    };
+
+    const handleSuccess = () => {
+        router.refresh();
+        setIsModalOpen(false);
+        // We could also re-fetch here if we wanted client-side update without full refresh
+    };
+
+    const handleGuestUpdate = () => {
+        // Typically we'd update the guests list here, 
+        // but for now we rely on server refresh or just let it be.
+        router.refresh();
     };
 
     return (
@@ -188,15 +216,25 @@ export default function ReservasList({ initialReservations, today }: Props) {
                                         )}
                                     </div>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => handleDelete(res.id)}
-                                        disabled={isDeleting}
-                                        className="text-red-600 hover:bg-red-50 rounded-full p-1 flex items-center justify-center disabled:opacity-50"
-                                        title="Eliminar reserva"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleEdit(res)}
+                                            className="text-blue-600 hover:bg-blue-50 rounded-full p-1 flex items-center justify-center"
+                                            title="Editar reserva"
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDelete(res.id)}
+                                            disabled={isDeleting}
+                                            className="text-red-600 hover:bg-red-50 rounded-full p-1 flex items-center justify-center disabled:opacity-50"
+                                            title="Eliminar reserva"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {typeof res.total_price === "number" && (
@@ -212,6 +250,16 @@ export default function ReservasList({ initialReservations, today }: Props) {
                     })}
                 </div>
             )}
+            {/* MODAL EDICIÓN */}
+            <ReservationFormModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSuccess={handleSuccess}
+                reservationToEdit={editingReservation}
+                rooms={rooms}
+                guests={guests}
+                onGuestsUpdate={handleGuestUpdate}
+            />
         </div>
     );
 }

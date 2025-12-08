@@ -13,6 +13,8 @@ import {
     Search,
     Trash2,
     Clock,
+    FileDown,
+    Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Reservation, Guest, HostalRoom } from "@/types/hostal";
@@ -111,6 +113,7 @@ export default function ReservationFormModal({
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCreatingGuest, setIsCreatingGuest] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
 
     // --- COMPUTED ---
     const nights = useMemo(() => {
@@ -416,6 +419,48 @@ export default function ReservationFormModal({
         }
     };
 
+    const handleDownloadPdf = () => {
+        if (!reservationToEdit) return;
+        const r: any = reservationToEdit;
+        const url = `/api/reservations/${r.id}/voucher`;
+        window.open(url, "_blank");
+        toast.info("Descarga iniciada...");
+    };
+
+    const handleSendEmail = async () => {
+        if (!reservationToEdit) return;
+        const r: any = reservationToEdit;
+
+        // Check for email availability in current guests list first or rely on backend validation
+        // We do a quick check if possible, but backend validation is safer
+        const guestId = Number(formGuestId);
+        const guest = guests.find(g => g.id === guestId);
+        if (!guest?.email) {
+            toast.error("El huésped seleccionado no tiene un correo registrado. Edítelo para agregar un email.");
+            return;
+        }
+
+        if (!confirm(`¿Enviar comprobante al correo ${guest.email}?`)) return;
+
+        const toastId = toast.loading("Enviando comprobante...");
+        setIsSendingEmail(true);
+
+        try {
+            const res = await fetch(`/api/reservations/${r.id}/send-confirmation`, { method: "POST" });
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                throw new Error(data.error || "Error enviando correo");
+            }
+
+            toast.success(`Comprobante enviado a ${guest.email}`, { id: toastId });
+        } catch (error: any) {
+            toast.error(error.message || "Error al enviar correo", { id: toastId });
+        } finally {
+            setIsSendingEmail(false);
+        }
+    };
+
     if (!isOpen) return null;
 
     // --- RENDER ---
@@ -555,8 +600,8 @@ export default function ReservationFormModal({
                                                 }}
                                                 placeholder="Escriba nombre o documento..."
                                                 className={`w-full border rounded-lg shadow-sm pl-10 p-2.5 ${formGuestId
-                                                        ? "border-green-500 bg-green-50"
-                                                        : "border-gray-300"
+                                                    ? "border-green-500 bg-green-50"
+                                                    : "border-gray-300"
                                                     }`}
                                                 autoComplete="off"
                                             />
@@ -858,13 +903,8 @@ export default function ReservationFormModal({
                             {reservationToEdit ? (
                                 <>
                                     <span>
-                                        Editando reserva <b>#{(reservationToEdit as any).id}</b>
+                                        Reserva <b>#{(reservationToEdit as any).id}</b>
                                     </span>
-                                    {isDeleting && (
-                                        <span className="text-red-500 text-xs">
-                                            Eliminando...
-                                        </span>
-                                    )}
                                 </>
                             ) : (
                                 "Creando nueva reserva"
@@ -872,21 +912,46 @@ export default function ReservationFormModal({
                         </div>
                         <div className="flex gap-3 items-center">
                             {reservationToEdit && (
-                                <button
-                                    type="button"
-                                    onClick={handleDelete}
-                                    disabled={isDeleting || isSubmitting}
-                                    className="px-4 py-2.5 border border-red-500 text-red-600 font-semibold rounded-lg hover:bg-red-50 text-sm flex items-center gap-2 disabled:opacity-60"
-                                >
-                                    <Trash2 size={16} />
-                                    {isDeleting ? "Eliminando..." : "Eliminar"}
-                                </button>
+                                <>
+                                    <div className="flex mr-2 gap-2 border-r pr-4">
+                                        <button
+                                            type="button"
+                                            onClick={handleDownloadPdf}
+                                            disabled={isSubmitting || isDeleting || isSendingEmail}
+                                            className="p-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm disabled:opacity-50"
+                                            title="Descargar Comprobante PDF"
+                                        >
+                                            <FileDown size={18} />
+                                            <span className="hidden xl:inline">PDF</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleSendEmail}
+                                            disabled={isSubmitting || isDeleting || isSendingEmail}
+                                            className="p-2 border border-blue-200 text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 flex items-center gap-2 text-sm disabled:opacity-50"
+                                            title="Enviar Comprobante por Correo"
+                                        >
+                                            <Mail size={18} />
+                                            <span className="hidden xl:inline">{isSendingEmail ? "Enviando..." : "Email"}</span>
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleDelete}
+                                        disabled={isDeleting || isSubmitting || isSendingEmail}
+                                        className="px-3 py-2.5 border border-red-500 text-red-600 font-semibold rounded-lg hover:bg-red-50 text-sm flex items-center gap-2 disabled:opacity-60"
+                                        title="Eliminar Reserva"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </>
                             )}
                             <button
                                 type="button"
                                 onClick={onClose}
-                                disabled={isSubmitting || isDeleting}
-                                className="px-6 py-2.5 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors text-sm disabled:opacity-60"
+                                disabled={isSubmitting || isDeleting || isSendingEmail}
+                                className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors text-sm disabled:opacity-60"
                             >
                                 Cancelar
                             </button>

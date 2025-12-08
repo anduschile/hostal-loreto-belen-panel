@@ -1,307 +1,237 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DaybookEntry } from "@/lib/data/daybook";
-import { HostalRoom, Guest } from "@/types/hostal";
-import { formatCurrencyCLP, formatDateCL } from "@/lib/formatters";
-import ReservationFormModal from "@/components/reservations/ReservationFormModal";
-import { Edit, Calendar, BedDouble, Users, AlertCircle, CheckCircle, FileText } from "lucide-react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { Users, Clock, ArrowRight, LogIn, LogOut, Coffee } from "lucide-react";
 
 type Props = {
     initialDate: string;
-    initialEntries: DaybookEntry[];
-    rooms: HostalRoom[];
-    guests: Guest[];
+    entries: DaybookEntry[];
 };
 
-export default function DaybookClient({ initialDate, initialEntries, rooms, guests }: Props) {
+export default function DaybookClient({ initialDate, entries }: Props) {
     const router = useRouter();
     const [date, setDate] = useState(initialDate);
-    const [entries, setEntries] = useState<DaybookEntry[]>(initialEntries);
-    const [editingId, setEditingId] = useState<number | null>(null);
-    const [tempInvoiceNumber, setTempInvoiceNumber] = useState("");
+    const [updatingMap, setUpdatingMap] = useState<Record<number, boolean>>({});
 
-    // Modal State
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalReservation, setModalReservation] = useState<any>(null);
-
-    useEffect(() => {
-        setEntries(initialEntries);
-        setDate(initialDate);
-    }, [initialEntries, initialDate]);
-
-    const handleDateChange = (newDate: string) => {
+    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newDate = e.target.value;
         setDate(newDate);
-        router.replace(`/panel/libro-dia?date=${newDate}`);
+        router.push(`/panel/libro-dia?date=${newDate}`);
     };
 
-    // KPIs Logic
-    const occupiedRooms = entries.length;
-    // Assuming 1 guest per reservation if fields missing, but usually we'd sum adults+children if available.
-    // For now, count entries as proxy for "Groups/Rooms".
-    const pendingInvoices = entries.filter(e => e.invoice_status === "pending").length;
-    const totalPotential = entries.reduce((acc, curr) => acc + curr.total_price, 0);
+    // --- ACCIONES ---
 
-    // --- QUICK INVOICE EDIT ---
-    const startEdit = (entry: DaybookEntry) => {
-        setEditingId(entry.id);
-        setTempInvoiceNumber(entry.invoice_number || "");
-    };
+    const updateStatus = async (id: number, newStatus: string, actionName: string) => {
+        if (updatingMap[id]) return;
 
-    const cancelEdit = () => {
-        setEditingId(null);
-        setTempInvoiceNumber("");
-    };
+        // Optimistic update prevention
+        setUpdatingMap(prev => ({ ...prev, [id]: true }));
+        const toastId = toast.loading(`Procesando ${actionName}...`);
 
-    const handleSaveInvoice = (id: number) => {
-        const entry = entries.find(e => e.id === id);
-        if (entry) {
-            handleInvoiceUpdate(entry, undefined, tempInvoiceNumber);
-            setEditingId(null);
-        }
-    };
-
-    const handleInvoiceUpdate = async (
-        entry: DaybookEntry,
-        newStatus?: "pending" | "invoiced" | "partial",
-        newNumber?: string
-    ) => {
         try {
-            const payload: any = { reservationId: entry.id };
-            if (newStatus) payload.invoice_status = newStatus;
-            if (newNumber !== undefined) payload.invoice_number = newNumber;
-            if (newStatus === "invoiced" && !entry.invoice_date) {
-                payload.invoice_date = new Date().toISOString().split('T')[0];
-            }
-
-            const res = await fetch("/api/daybook", {
-                method: "PUT",
+            const res = await fetch(`/api/reservations/${id}/status`, {
+                method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({ status: newStatus })
             });
 
-            if (!res.ok) throw new Error("Error al actualizar facturación");
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Error al actualizar");
+            }
 
-            // Optimistic update
-            const updated = { ...entry, ...payload };
-            if (newStatus) updated.invoice_status = newStatus;
-            if (newNumber !== undefined) updated.invoice_number = newNumber;
-
-            setEntries(prev => prev.map(e => e.id === entry.id ? updated : e));
-            router.refresh();
-
-        } catch (error: any) {
-            alert(error.message);
+            toast.success(`${actionName} completado`, { id: toastId });
+            router.refresh(); // Refresh server data
+        } catch (e: any) {
+            console.error(e);
+            toast.error(e.message || "Error al actualizar", { id: toastId });
+        } finally {
+            setUpdatingMap(prev => ({ ...prev, [id]: false }));
         }
     };
 
-    // --- SHARED MODAL ---
-    const openFullEdit = (entry: DaybookEntry) => {
-        setModalReservation(entry);
-        setIsModalOpen(true);
-    };
+    // --- CLASIFICACIÓN ---
+    // Llegan: CheckIn == Date AND Status != checked_in/out
+    const arrivals = entries.filter(r =>
+        r.check_in === date &&
+        (r.status === "pending" || r.status === "confirmed")
+    );
 
-    const handleModalSuccess = () => {
-        router.refresh();
-        setIsModalOpen(false);
-    };
+    // Salen: CheckOut == Date AND Status != checked_out (usually checked_in)
+    const departures = entries.filter(r =>
+        r.check_out === date &&
+        (r.status === "checked_in" || r.status === "confirmed")
+    );
 
-    const handleGuestUpdate = (g: Guest) => {
-        // Optional: If we want to add new guest to local list
-    };
+    // Hospedados: 
+    // Opción A: CheckIn < Date < CheckOut AND Status = checked_in
+    // Opción B: CheckIn == Date AND Status = checked_in (ya llegaron hoy)
+    const staying = entries.filter(r => {
+        const isStayingThrough = r.check_in < date && r.check_out > date;
+        const arrivedToday = r.check_in === date && r.status === "checked_in";
+        const stayingTonightButDepartingTomorrowOrLater = r.status === "checked_in" && r.check_out > date; // Covers broad "In House"
 
-    // Helpers
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case "invoiced":
-                return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><CheckCircle size={12} /> Facturada</span>;
-            case "partial":
-                return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"><AlertCircle size={12} /> Parcial</span>;
-            default:
-                return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"><AlertCircle size={12} /> Pendiente</span>;
-        }
+        // Simplificación: "Hospedados" son los que están dentro (checked_in) Y NO salen hoy (porque esos van en Salen).
+        // Si salen hoy, están en "Salen".
+        // Si llegaron hoy (check_in=today) y ya hicieron check-in, deberían estar en "Hospedados" o "Llegan"? Ya no "Llegan", pues ya llegaron.
+        // Entonces: Status 'checked_in' AND check_out > date.
+
+        return r.status === "checked_in" && r.check_out > date;
+    });
+
+    // NOTA: Si status es "confirmed" pero check_in < date, es un "No Show" o olvido de check-in. 
+    // Podríamos mostrarlos en "Llegan (Atrasado)" o similar, pero por ahora seguimos lógica simple.
+
+    const renderCard = (r: DaybookEntry, type: "arrival" | "departure" | "stay") => {
+        const isUpdating = updatingMap[r.id];
+
+        return (
+            <div key={r.id} className="bg-white border rounded-lg p-4 shadow-sm flex flex-col gap-3 relative overflow-hidden">
+                {/* Status Stripe */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1 ${r.status === "checked_in" ? "bg-blue-500" :
+                    r.status === "confirmed" ? "bg-green-500" : "bg-yellow-500"
+                    }`} />
+
+                <div className="flex justify-between items-start pl-2">
+                    <div>
+                        <span className="text-xs font-bold text-gray-500">
+                            {r.room_name}
+                            <span className="font-normal text-gray-400 mx-1">•</span>
+                            {r.id}
+                        </span>
+                        <h3 className="font-bold text-gray-900 line-clamp-1">{r.guest_name || "Sin Huésped"}</h3>
+                    </div>
+                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${r.status === "confirmed" ? "bg-green-50 border-green-200 text-green-700" :
+                        r.status === "checked_in" ? "bg-blue-50 border-blue-200 text-blue-700" :
+                            "bg-gray-100 text-gray-600"
+                        }`}>
+                        {r.status}
+                    </span>
+                </div>
+
+                <div className="pl-2 text-xs text-gray-600 space-y-1">
+                    <div className="flex items-center gap-2">
+                        <Users size={14} className="text-gray-400" />
+                        <span>{r.adults} Ad. {r.children ? `+ ${r.children} Ni.` : ""}</span>
+                    </div>
+
+                    {type === "arrival" && r.arrival_time && (
+                        <div className="flex items-center gap-2">
+                            <Clock size={14} className="text-orange-400" />
+                            <span>Llegada: {r.arrival_time}</span>
+                        </div>
+                    )}
+                    {(type === "departure" || type === "stay") && r.breakfast_time && (
+                        <div className="flex items-center gap-2">
+                            <Coffee size={14} className="text-amber-600" />
+                            <span>Desayuno: {r.breakfast_time}</span>
+                        </div>
+                    )}
+
+                    {r.notes && (
+                        <p className="bg-yellow-50 p-1.5 rounded text-yellow-800 mt-1 italic border border-yellow-100">
+                            "{r.notes}"
+                        </p>
+                    )}
+                </div>
+
+                {/* Actions */}
+                <div className="pl-2 pt-2 mt-auto">
+                    {type === "arrival" && (
+                        <button
+                            onClick={() => updateStatus(r.id, "checked_in", "Check-in")}
+                            disabled={isUpdating}
+                            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                        >
+                            <LogIn size={16} /> Marcar Check-in
+                        </button>
+                    )}
+
+                    {type === "departure" && (
+                        <button
+                            onClick={() => updateStatus(r.id, "checked_out", "Check-out")}
+                            disabled={isUpdating}
+                            className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                        >
+                            <LogOut size={16} /> Marcar Check-out
+                        </button>
+                    )}
+
+                    {type === "stay" && (
+                        <div className="text-center py-1 text-xs text-gray-400">
+                            En casa
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
     };
 
     return (
-        <div className="space-y-8">
-            {/* Header & Controls */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-xl shadow-sm border">
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-lg shadow-sm border">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Libro del Día</h1>
-                    <p className="text-sm text-gray-500">Gestión operativa diaria y facturación</p>
+                    <p className="text-gray-500 text-sm capitalize">
+                        {format(new Date(date + "T00:00:00"), "EEEE d 'de' MMMM, yyyy", { locale: es })}
+                    </p>
                 </div>
-
-                <div className="flex items-center gap-3 bg-gray-50 p-1.5 rounded-lg border">
-                    <Calendar className="text-gray-400 ml-2" size={20} />
+                <div>
                     <input
                         type="date"
                         value={date}
-                        onChange={(e) => handleDateChange(e.target.value)}
-                        className="bg-transparent border-none focus:ring-0 text-sm font-medium text-gray-700"
+                        onChange={handleDateChange}
+                        className="border rounded-lg p-2 text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
-                    <div className="h-6 w-px bg-gray-300 mx-1"></div>
-                    <button
-                        onClick={() => handleDateChange(new Date().toISOString().split('T')[0])}
-                        className="text-xs font-bold text-blue-600 hover:bg-white px-3 py-1.5 rounded-md transition-shadow uppercase"
-                    >
-                        Hoy
-                    </button>
                 </div>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500 flex items-center justify-between">
-                    <div>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Habitaciones Ocupadas</p>
-                        <p className="text-3xl font-extrabold text-gray-900">{occupiedRooms}</p>
-                    </div>
-                    <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-                        <BedDouble size={24} />
+            {/* Kanbas Columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                {/* LLEGAN */}
+                <div className="space-y-3">
+                    <h2 className="font-bold text-gray-700 flex items-center gap-2 pb-2 border-b-2 border-green-500">
+                        <LogIn className="text-green-600" size={20} />
+                        Llegan ({arrivals.length})
+                    </h2>
+                    <div className="space-y-3">
+                        {arrivals.map(r => renderCard(r, "arrival"))}
+                        {arrivals.length === 0 && <p className="text-sm text-gray-400 italic py-4 text-center">No hay llegadas pendientes hoy.</p>}
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-yellow-500 flex items-center justify-between">
-                    <div>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Por Facturar</p>
-                        <p className="text-3xl font-extrabold text-gray-900">{pendingInvoices}</p>
-                    </div>
-                    <div className="p-3 bg-yellow-50 text-yellow-600 rounded-lg">
-                        <FileText size={24} />
+                {/* SALEN */}
+                <div className="space-y-3">
+                    <h2 className="font-bold text-gray-700 flex items-center gap-2 pb-2 border-b-2 border-orange-500">
+                        <LogOut className="text-orange-600" size={20} />
+                        Salen ({departures.length})
+                    </h2>
+                    <div className="space-y-3">
+                        {departures.map(r => renderCard(r, "departure"))}
+                        {departures.length === 0 && <p className="text-sm text-gray-400 italic py-4 text-center">No hay salidas pendientes hoy.</p>}
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-emerald-500 flex items-center justify-between">
-                    <div>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total del Día (Est)</p>
-                        <p className="text-2xl font-extrabold text-gray-900">{formatCurrencyCLP(totalPotential)}</p>
-                    </div>
-                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
-                        <Users size={24} />
+                {/* HOSPEDADOS */}
+                <div className="space-y-3">
+                    <h2 className="font-bold text-gray-700 flex items-center gap-2 pb-2 border-b-2 border-blue-500">
+                        <Coffee className="text-blue-600" size={20} />
+                        Hospedados ({staying.length})
+                    </h2>
+                    <div className="space-y-3">
+                        {staying.map(r => renderCard(r, "stay"))}
+                        {staying.length === 0 && <p className="text-sm text-gray-400 italic py-4 text-center">No hay huéspedes alojados.</p>}
                     </div>
                 </div>
+
             </div>
-
-            {/* Table */}
-            <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50 border-b text-xs uppercase tracking-wider text-gray-500">
-                                <th className="p-4 font-semibold">Habitación</th>
-                                <th className="p-4 font-semibold">Huésped Principal</th>
-                                <th className="p-4 font-semibold">Fechas</th>
-                                <th className="p-4 font-semibold">Total</th>
-                                <th className="p-4 font-semibold">Estado Factura</th>
-                                <th className="p-4 font-semibold">N° Documento</th>
-                                <th className="p-4 font-semibold text-right">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-sm">
-                            {entries.map((entry) => (
-                                <tr key={entry.id} className="hover:bg-blue-50/30 transition-colors group">
-                                    <td className="p-4">
-                                        <div className="font-bold text-gray-900">{entry.room_name}</div>
-                                        <div className="text-xs text-gray-500">{entry.room_type}</div>
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="font-medium text-gray-800">{entry.guest_name}</div>
-                                        {entry.company_name && (
-                                            <div className="text-xs text-gray-500 flex items-center gap-1">
-                                                🏢 {entry.company_name}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="flex flex-col text-xs text-gray-600">
-                                            <span><span className="font-semibold w-8 inline-block">IN:</span> {formatDateCL(entry.check_in)}</span>
-                                            <span><span className="font-semibold w-8 inline-block">OUT:</span> {formatDateCL(entry.check_out)}</span>
-                                        </div>
-                                    </td>
-                                    <td className="p-4 font-bold text-gray-900">
-                                        {formatCurrencyCLP(entry.total_price)}
-                                    </td>
-                                    <td className="p-4">
-                                        {getStatusBadge(entry.invoice_status)}
-                                    </td>
-                                    <td className="p-4">
-                                        {editingId === entry.id ? (
-                                            <div className="flex items-center gap-1 animate-in fade-in zoom-in-95">
-                                                <input
-                                                    type="text"
-                                                    value={tempInvoiceNumber}
-                                                    onChange={(e) => setTempInvoiceNumber(e.target.value)}
-                                                    className="border border-blue-300 rounded px-2 py-1 w-24 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                                    placeholder="12345"
-                                                    autoFocus
-                                                />
-                                                <button onClick={() => handleSaveInvoice(entry.id)} className="bg-green-500 text-white p-1 rounded hover:bg-green-600 shadow-sm"><CheckCircle size={14} /></button>
-                                                <button onClick={cancelEdit} className="bg-gray-200 text-gray-600 p-1 rounded hover:bg-gray-300"><AlertCircle size={14} /></button>
-                                            </div>
-                                        ) : (
-                                            <div className="group/edit flex items-center gap-2">
-                                                <span className={`font-mono ${!entry.invoice_number ? "text-gray-400 italic text-xs" : "text-gray-700"}`}>
-                                                    {entry.invoice_number || "Sin N°"}
-                                                </span>
-                                                <button
-                                                    onClick={() => startEdit(entry)}
-                                                    className="opacity-0 group-hover/edit:opacity-100 text-blue-600 hover:text-blue-800 transition-opacity p-1 bg-blue-50 rounded"
-                                                    title="Editar Número"
-                                                >
-                                                    <Edit size={12} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            {entry.invoice_status !== "invoiced" && (
-                                                <button
-                                                    onClick={() => handleInvoiceUpdate(entry, "invoiced")}
-                                                    className="inline-flex items-center gap-1 bg-white border border-green-200 text-green-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-green-50 hover:border-green-300 transition-colors shadow-sm"
-                                                    title="Marcar como Facturada"
-                                                >
-                                                    <CheckCircle size={14} /> Facturar
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={() => openFullEdit(entry)}
-                                                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
-                                                title="Ver detalle completo"
-                                            >
-                                                <Edit size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {entries.length === 0 && (
-                                <tr>
-                                    <td colSpan={7} className="p-12 text-center text-gray-500">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <Calendar size={48} className="text-gray-300" />
-                                            <p className="font-medium">No hay reservas activas para esta fecha.</p>
-                                            <p className="text-xs">Usa el calendario para crear nuevas reservas.</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* SHARED MODAL */}
-            <ReservationFormModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSuccess={handleModalSuccess}
-                reservationToEdit={modalReservation}
-                rooms={rooms}
-                guests={guests}
-                onGuestsUpdate={handleGuestUpdate}
-            />
         </div>
     );
 }

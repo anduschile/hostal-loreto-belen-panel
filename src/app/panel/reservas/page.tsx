@@ -1,4 +1,6 @@
 import { getReservations } from "@/lib/data/reservations";
+import { getRooms } from "@/lib/data/rooms";
+import { getGuests } from "@/lib/data/guests";
 import ReservasList from "./ReservasList";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +18,9 @@ export default async function ReservasPage() {
     return [];
   });
 
+  const rooms = await getRooms();
+  const guests = await getGuests();
+
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold text-gray-800">Reservas</h1>
@@ -23,6 +28,8 @@ export default async function ReservasPage() {
       <ReservasList
         initialReservations={allReservations ?? []}
         today={today}
+        rooms={rooms ?? []}
+        guests={guests ?? []}
       />
     </div>
   );

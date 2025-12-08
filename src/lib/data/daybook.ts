@@ -24,6 +24,8 @@ export type DaybookEntry = {
     children?: number;
     source?: string;
     companions_json?: any | null;
+    arrival_time?: string | null;
+    breakfast_time?: string | null;
 };
 
 // ==========================
@@ -52,7 +54,7 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
       hostal_guests (full_name)
     `)
         .lte("check_in", date)
-        .gt("check_out", date)
+        .gte("check_out", date)
         .not("status", "eq", "cancelled");
 
     if (error) {

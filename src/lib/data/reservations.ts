@@ -105,7 +105,7 @@ export async function getReservations(filters: ReservationFilters = {}) {
       arrival_time,
       breakfast_time,
       hostal_rooms ( id, name, room_type, code ),
-      hostal_guests ( id, full_name, phone ),
+      hostal_guests ( id, full_name, phone, email, document_id ),
       hostal_companies ( id, name )
     `
     )
@@ -178,7 +178,7 @@ export async function getReservationById(id: number) {
       arrival_time,
       breakfast_time,
       hostal_rooms ( id, name, room_type, code ),
-      hostal_guests ( id, full_name, phone ),
+      hostal_guests ( id, full_name, phone, email, document_id ),
       hostal_companies ( id, name )
     `
     )
