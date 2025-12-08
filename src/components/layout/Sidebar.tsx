@@ -6,146 +6,128 @@ import { usePathname } from "next/navigation";
 import {
     LayoutDashboard,
     CalendarDays,
-    BookOpen,
-    BedDouble,
+    NotebookTabs,
+    BookOpenCheck,
     Users,
+    Building2,
     CreditCard,
-    ClipboardCheck,
-    FileText,
+    BarChart3,
+    Settings,
+    Menu,
     X,
 } from "lucide-react";
+import { useState } from "react";
 
-export const menuItems = [
-    { name: "Escritorio", path: "/panel/dashboard", icon: LayoutDashboard },
-    { name: "Calendario", path: "/panel/calendario", icon: CalendarDays },
-    { name: "Libro del Día", path: "/panel/libro-dia", icon: BookOpen },
-    { name: "Reservas", path: "/panel/reservas", icon: ClipboardCheck },
-    {
-        name: "Libro de Pasajeros",
-        path: "/panel/registro-huespedes",
-        icon: FileText,
-    },
-    { name: "Pagos", path: "/panel/pagos", icon: CreditCard },
-    { name: "Habitaciones", path: "/panel/habitaciones", icon: BedDouble },
-    { name: "Huéspedes", path: "/panel/huespedes", icon: Users },
+const navItems = [
+    { label: "Panel", href: "/panel", icon: LayoutDashboard },
+    { label: "Calendario", href: "/panel/calendario", icon: CalendarDays },
+    { label: "Reservas", href: "/panel/reservas", icon: NotebookTabs },
+    { label: "Libro del Día", href: "/panel/libro-dia", icon: BookOpenCheck },
+    { label: "Huéspedes", href: "/panel/huespedes", icon: Users },
+    { label: "Empresas", href: "/panel/empresas", icon: Building2 },
+    { label: "Pagos", href: "/panel/pagos", icon: CreditCard },
+    { label: "Reportes", href: "/panel/reportes", icon: BarChart3 },
+    { label: "Usuarios", href: "/panel/usuarios", icon: Settings },
 ];
 
-type SidebarProps = {
-    isOpen: boolean;
-    onClose: () => void;
-};
-
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar() {
     const pathname = usePathname();
+    const [isOpen, setIsOpen] = useState(false);
+
+    const toggleSidebar = () => setIsOpen(!isOpen);
 
     return (
         <>
-            {/* Mobile Overlay */}
+            {/* Mobile Trigger */}
+            <button
+                onClick={toggleSidebar}
+                className="md:hidden fixed top-4 left-4 z-50 p-2 bg-slate-900 text-white rounded shadow-lg"
+            >
+                {isOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+
+            {/* Overlay Mobile */}
             {isOpen && (
                 <div
-                    className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm"
-                    onClick={onClose}
+                    className="fixed inset-0 bg-black/50 z-40 md:hidden"
+                    onClick={() => setIsOpen(false)}
                 />
             )}
 
-            {/* Sidebar */}
             <aside
                 className={`
-          fixed top-0 left-0 z-50 h-screen w-64 
-          bg-slate-900/95 text-white border-r border-slate-800
-          transition-transform duration-300 ease-in-out shadow-2xl
-          lg:translate-x-0 lg:static
-          ${isOpen ? "translate-x-0" : "-translate-x-full"}
-        `}
+                    fixed md:translate-x-0 top-0 left-0 z-40
+                    h-screen w-64 bg-slate-900 text-slate-100 flex flex-col
+                    transition-transform duration-300 ease-in-out
+                    ${isOpen ? "translate-x-0" : "-translate-x-full"}
+                `}
             >
-                {/* Header */}
-                <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-white rounded-md flex items-center justify-center overflow-hidden">
-                            {/* Ajusta el src al nombre que le des al archivo en /public */}
-                            <Image
-                                src="/logo-pagina.png"
-                                alt="Hostal Loreto Belén"
-                                width={36}
-                                height={36}
-                                className="object-contain"
-                            />
-                        </div>
-                        <div className="flex flex-col leading-tight">
-                            <span className="text-[10px] uppercase tracking-[0.16em] text-lime-300">
-                                Hostal
-                            </span>
-                            <span className="text-sm font-bold text-white tracking-wide">
-                                Loreto Belén
-                            </span>
-                        </div>
+                {/* Branding */}
+                <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                    <Image
+                        src="/logo-pagina.png"
+                        alt="Hostal Loreto Belén"
+                        width={40}
+                        height={40}
+                        className="rounded-full shadow-sm object-cover bg-white"
+                        priority
+                    />
+                    <div className="flex flex-col">
+                        <span className="font-semibold text-slate-100 leading-tight">
+                            Hostal Loreto Belén
+                        </span>
+                        <span className="text-xs text-emerald-300/80">
+                            Panel de administración
+                        </span>
                     </div>
-
-                    <button
-                        onClick={onClose}
-                        className="lg:hidden text-slate-400 hover:text-white"
-                    >
-                        <X size={22} />
-                    </button>
                 </div>
 
-                {/* Nav */}
-                <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100vh-4rem)]">
-                    <p className="px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-[0.18em] mb-2 mt-2">
-                        Principal
-                    </p>
-
-                    {menuItems.map((item) => {
-                        const isActive = pathname === item.path;
+                {/* Navigation */}
+                <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+                    {navItems.map((item) => {
+                        // Check if active: exact match for /panel or startsWith for subroutes (e.g., /panel/calendario)
+                        // Special case: /panel should also be active if pathname is /panel/dashboard (if internal redirect happens client-side)
+                        // but since we redirect logic, just standard startsWith/exact match is okay.
+                        // However, to prevent "/panel" matching everything, we do exact match for root "/panel".
+                        const isActive = item.href === "/panel"
+                            ? pathname === "/panel" || pathname === "/panel/dashboard"
+                            : pathname.startsWith(item.href);
 
                         return (
                             <Link
-                                key={item.path}
-                                href={item.path}
-                                onClick={() => {
-                                    if (window.innerWidth < 1024) onClose();
-                                }}
+                                key={item.href}
+                                href={item.href}
+                                onClick={() => setIsOpen(false)}
                                 className={`
-                  group flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium
-                  transition-all duration-200
-                  ${isActive
-                                        ? "bg-lime-400 text-slate-900 shadow-md shadow-lime-900/20"
-                                        : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
+                                    ${isActive
+                                        ? "bg-emerald-900/40 text-emerald-400 border-l-2 border-emerald-400 shadow-sm"
+                                        : "text-slate-400 hover:bg-slate-800 hover:text-emerald-300 border-l-2 border-transparent"
                                     }
-                `}
+                                `}
                             >
-                                <item.icon
-                                    size={20}
-                                    className={
-                                        isActive
-                                            ? "text-slate-900"
-                                            : "text-slate-400 group-hover:text-white"
-                                    }
-                                />
-                                {item.name}
+                                <item.icon size={18} className={isActive ? "text-emerald-400" : "text-slate-500 group-hover:text-emerald-300"} />
+                                {item.label}
                             </Link>
                         );
                     })}
+                </nav>
 
-                    {/* Usuario */}
-                    <div className="pt-4 mt-4 border-t border-slate-800">
-                        <div className="px-4 py-2">
-                            <p className="text-[11px] text-slate-500 mb-1 uppercase tracking-[0.16em]">
-                                Usuario
-                            </p>
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">
-                                    AD
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-slate-100">Admin</p>
-                                    <p className="text-xs text-slate-500">admin@hostal.cl</p>
-                                </div>
-                            </div>
+                {/* Footer User Info */}
+                <div className="p-4 border-t border-slate-800">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold ring-1 ring-slate-600">
+                            U
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-sm font-medium text-slate-200">Usuario</span>
+                            <span className="text-xs text-slate-500">Administrador</span>
                         </div>
                     </div>
-                </nav>
+                </div>
             </aside>
         </>
     );
 }
+
+export { navItems as menuItems };
