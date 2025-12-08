@@ -1,0 +1,8 @@
+src/components/reservations/ReservationFormModal.tsx(178,13): error TS2304: Cannot find name 'setFormArrivalTime'.
+src/components/reservations/ReservationFormModal.tsx(179,13): error TS2304: Cannot find name 'setFormBreakfastTime'.
+src/components/reservations/ReservationFormModal.tsx(262,27): error TS2304: Cannot find name 'formArrivalTime'.
+src/components/reservations/ReservationFormModal.tsx(263,29): error TS2304: Cannot find name 'formBreakfastTime'.
+src/components/reservations/ReservationFormModal.tsx(442,56): error TS2304: Cannot find name 'formArrivalTime'.
+src/components/reservations/ReservationFormModal.tsx(443,64): error TS2304: Cannot find name 'setFormArrivalTime'.
+src/components/reservations/ReservationFormModal.tsx(453,56): error TS2304: Cannot find name 'formBreakfastTime'.
+src/components/reservations/ReservationFormModal.tsx(454,64): error TS2304: Cannot find name 'setFormBreakfastTime'.

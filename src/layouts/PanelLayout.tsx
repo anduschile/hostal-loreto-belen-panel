@@ -1,45 +1,38 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
-
-const menu = [
-  { name: "Dashboard", path: "/panel/dashboard" },
-  { name: "Reservas", path: "/panel/reservas" },
-  { name: "Habitaciones", path: "/panel/habitaciones" },
-  { name: "Empresas", path: "/panel/empresas" },
-  { name: "Housekeeping", path: "/panel/housekeeping" },
-  { name: "Pagos", path: "/panel/pagos" },
-  { name: "Auditoría", path: "/panel/auditoria" },
-  { name: "Usuarios", path: "/panel/usuarios" },
-];
+import Sidebar, { menuItems } from "@/components/layout/Sidebar";
+import TopBar from "@/components/layout/TopBar";
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const pathname = usePathname();
 
+  // Infer title from path
+  const currentItem = menuItems.find(item => item.path === pathname) || menuItems.find(item => pathname.startsWith(item.path) && item.path !== "/panel");
+  const pageTitle = currentItem ? currentItem.name : "Panel";
+
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-white border-r shadow-sm p-4 flex flex-col gap-2">
-        <h1 className="text-xl font-bold mb-4">Hostal Natales</h1>
+    <div className="flex min-h-screen bg-gray-50 font-sans text-gray-900">
 
-        {menu.map((item) => (
-          <Link
-            key={item.path}
-            href={item.path}
-            className={`p-2 rounded-md font-medium ${
-              pathname === item.path
-                ? "bg-blue-600 text-white"
-                : "hover:bg-gray-200"
-            }`}
-          >
-            {item.name}
-          </Link>
-        ))}
-      </aside>
+      {/* Responsive Sidebar */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
 
-      {/* CONTENIDO PRINCIPAL */}
-      <main className="flex-1 p-6">{children}</main>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar
+          onMenuClick={() => setIsSidebarOpen(true)}
+          title={pageTitle}
+        />
+
+        <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

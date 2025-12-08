@@ -1,30 +1,36 @@
-// src/app/panel/calendario/page.tsx
-import { fetchReservations } from "@/lib/data/reservations";
-import CalendarClient from "./CalendarClient";
+import { getCalendarData } from "@/lib/data/calendar";
+import CalendarWrapper from "./CalendarWrapper";
+import { startOfWeek, endOfWeek, format } from "date-fns";
 
 export const dynamic = "force-dynamic";
 
-export default async function CalendarPage() {
-  const reservations = await fetchReservations();
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
+import { getRooms } from "@/lib/data/rooms";
+import { getGuests } from "@/lib/data/guests";
+
+export default async function CalendarPage(props: {
+  searchParams: SearchParams;
+}) {
   const today = new Date();
-  const initialYear = today.getFullYear();
-  const initialMonth = today.getMonth() + 1; // 1-12
+  const start = startOfWeek(today, { weekStartsOn: 1 });
+  const end = endOfWeek(today, { weekStartsOn: 1 });
+
+  const fromStr = format(start, "yyyy-MM-dd");
+  const toStr = format(end, "yyyy-MM-dd");
+
+  const [data, detailedRooms, guests] = await Promise.all([
+    getCalendarData(fromStr, toStr),
+    getRooms(),
+    getGuests()
+  ]);
 
   return (
-    <div className="p-6 space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Calendario de Reservas</h1>
-        <p className="text-sm text-gray-500">
-          Vista mensual por habitación. Versión básica para visualizar ocupación;
-          luego podemos refinar colores, tooltips, filtros, etc.
-        </p>
-      </div>
-
-      <CalendarClient
-        reservations={reservations}
-        initialYear={initialYear}
-        initialMonth={initialMonth}
+    <div className="p-4 h-full bg-gray-50 flex flex-col">
+      <CalendarWrapper
+        initialData={data}
+        masterRooms={detailedRooms}
+        masterGuests={guests}
       />
     </div>
   );

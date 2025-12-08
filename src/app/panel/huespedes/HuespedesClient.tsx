@@ -1,409 +1,222 @@
-// src/app/panel/huespedes/HuespedesClient.tsx
 "use client";
 
-import { useState, useMemo, ChangeEvent } from "react";
-import type { Guest } from "@/types/hostal";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Guest } from "@/types/hostal";
+import { User, Edit, Trash2, Plus, Search, Mail, Phone, FileText } from "lucide-react";
 
-interface HuespedesClientProps {
+type Props = {
   initialGuests: Guest[];
-}
-
-type GuestFormData = {
-  full_name: string;
-  document_id: string;
-  email: string;
-  phone: string;
-  country: string;
-  notes: string;
-  is_active: boolean;
 };
 
-const GUEST_INITIAL_STATE: GuestFormData = {
-  full_name: "",
-  document_id: "",
-  email: "",
-  phone: "",
-  country: "",
-  notes: "",
-  is_active: true,
-};
-
-export default function HuespedesClient({
-  initialGuests,
-}: HuespedesClientProps) {
+export default function HuespedesClient({ initialGuests }: Props) {
+  const router = useRouter();
   const [guests, setGuests] = useState<Guest[]>(initialGuests);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
-  const [formData, setFormData] = useState<GuestFormData>(GUEST_INITIAL_STATE);
-  const [error, setError] = useState<string | null>(null);
+  const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
 
-  const filteredGuests = useMemo(() => {
-    if (!searchTerm) return guests;
-    const lower = searchTerm.toLowerCase();
+  // Form State
+  const [formName, setFormName] = useState("");
+  const [formDoc, setFormDoc] = useState("");
+  const [formEmail, setFormEmail] = useState("");
+  const [formPhone, setFormPhone] = useState("");
+  const [formCountry, setFormCountry] = useState("Chile");
+  const [formNotes, setFormNotes] = useState("");
 
-    return guests.filter((guest) => {
-      return (
-        guest.full_name.toLowerCase().includes(lower) ||
-        (guest.document_id ?? "").toLowerCase().includes(lower) ||
-        (guest.email ?? "").toLowerCase().includes(lower) ||
-        (guest.phone ?? "").toLowerCase().includes(lower)
-      );
-    });
-  }, [guests, searchTerm]);
+  // Client-side simple filter (for small lists), otherwise Server Search should be used.
+  // We'll implemented client filter for `initialGuests`, but for real robustness we might want a "Search" button that calls API.
+  // For < 1000 guests, client side is instant.
+  const filtered = guests.filter(g =>
+    g.full_name.toLowerCase().includes(search.toLowerCase()) ||
+    (g.document_id && g.document_id.toLowerCase().includes(search.toLowerCase())) ||
+    (g.email && g.email.toLowerCase().includes(search.toLowerCase()))
+  );
 
-  const handleInputChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
-
-  const openModal = (guest: Guest | null = null) => {
-    setError(null);
-
-    if (guest) {
-      setSelectedGuest(guest);
-      setFormData({
-        full_name: guest.full_name,
-        document_id: guest.document_id ?? "",
-        email: guest.email ?? "",
-        phone: guest.phone ?? "",
-        country: guest.country ?? "",
-        notes: guest.notes ?? "",
-        is_active: guest.is_active,
-      });
-    } else {
-      setSelectedGuest(null);
-      setFormData(GUEST_INITIAL_STATE);
-    }
-
+  const openNew = () => {
+    setEditingGuest(null);
+    setFormName("");
+    setFormDoc("");
+    setFormEmail("");
+    setFormPhone("");
+    setFormCountry("Chile");
+    setFormNotes("");
     setIsModalOpen(true);
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelectedGuest(null);
-    setFormData(GUEST_INITIAL_STATE);
-    setError(null);
+  const openEdit = (g: Guest) => {
+    setEditingGuest(g);
+    setFormName(g.full_name);
+    setFormDoc(g.document_id || "");
+    setFormEmail(g.email || "");
+    setFormPhone(g.phone || "");
+    setFormCountry(g.country || "Chile");
+    setFormNotes(g.notes || "");
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("¿Eliminar este huésped?")) return;
+    try {
+      const res = await fetch(`/api/guests?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Error al eliminar");
+      setGuests(prev => prev.filter(g => g.id !== id));
+      router.refresh();
+    } catch (e) {
+      alert("Error al eliminar");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-
-    if (!formData.full_name.trim()) {
-      setError("El nombre completo es obligatorio.");
-      return;
-    }
-
-    const method = selectedGuest ? "PUT" : "POST";
-    const url = selectedGuest
-      ? `/api/huespedes/${selectedGuest.id}`
-      : "/api/huespedes";
-
-    // Convertir strings vacíos a null para campos opcionales
     const payload = {
-      full_name: formData.full_name.trim(),
-      document_id: formData.document_id.trim() || null,
-      email: formData.email.trim() || null,
-      phone: formData.phone.trim() || null,
-      country: formData.country.trim() || null,
-      notes: formData.notes.trim() || null,
-      is_active: formData.is_active,
+      full_name: formName,
+      document_id: formDoc,
+      email: formEmail,
+      phone: formPhone,
+      country: formCountry,
+      notes: formNotes,
+      is_active: true
     };
 
     try {
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json().catch(() => null as any);
-
-      if (!response.ok) {
-        const msg = data?.message || "Ocurrió un error al guardar.";
-        throw new Error(msg);
-      }
-
-      const savedGuest = data as Guest;
-
-      if (selectedGuest) {
-        setGuests((prev) =>
-          prev.map((g) => (g.id === savedGuest.id ? savedGuest : g))
-        );
+      let res;
+      if (editingGuest) {
+        res = await fetch("/api/guests", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingGuest.id, ...payload })
+        });
       } else {
-        setGuests((prev) => [...prev, savedGuest]);
+        res = await fetch("/api/guests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
       }
 
-      closeModal();
-    } catch (err: any) {
-      console.error("Error guardando huésped:", err);
-      setError(err?.message ?? "No se pudo guardar el huésped.");
-    }
-  };
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("¿Estás seguro de que quieres eliminar este huésped?")) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/huespedes/${id}`, {
-        method: "DELETE",
-      });
-
-      const data = await response.json().catch(() => null as any);
-
-      if (!response.ok) {
-        const msg = data?.message || "Error al eliminar huésped.";
-        throw new Error(msg);
+      if (editingGuest) {
+        setGuests(prev => prev.map(g => g.id === json.data.id ? json.data : g));
+      } else {
+        setGuests(prev => [...prev, json.data].sort((a, b) => a.full_name.localeCompare(b.full_name)));
       }
-
-      setGuests((prev) => prev.filter((g) => g.id !== id));
-    } catch (err: any) {
-      console.error("Error eliminando huésped:", err);
-      alert(err?.message ?? "No se pudo eliminar el huésped.");
+      setIsModalOpen(false);
+      router.refresh();
+    } catch (e: any) {
+      alert(e.message);
     }
   };
 
   return (
-    <div className="bg-white shadow-md rounded-lg p-6">
-      <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-        <input
-          type="text"
-          placeholder="Buscar por nombre, email, documento..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full md:w-1/3 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={() => openModal()}
-          className="w-full md:w-auto bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          + Añadir Huésped
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex justify-between mb-4 flex-wrap gap-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Buscar por nombre, RUT, email..."
+            className="border p-2 pl-10 rounded w-72"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <button onClick={openNew} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700">
+          <Plus size={18} /> Nuevo Huésped
         </button>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Documento
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Teléfono
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                País
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Estado
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
-              </th>
+        <table className="w-full text-left">
+          <thead>
+            <tr className="border-b bg-gray-50 text-gray-600 uppercase text-xs">
+              <th className="p-3">Huésped</th>
+              <th className="p-3">Documento</th>
+              <th className="p-3">Contacto</th>
+              <th className="p-3">Nacionalidad</th>
+              <th className="p-3">Info</th>
+              <th className="p-3 text-right">Acciones</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredGuests.map((guest) => (
-              <tr key={guest.id}>
-                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                  {guest.full_name}
+          <tbody className="divide-y">
+            {filtered.map(g => (
+              <tr key={g.id} className="hover:bg-gray-50">
+                <td className="p-3 font-medium">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs">
+                      {g.full_name.slice(0, 2).toUpperCase()}
+                    </div>
+                    {g.full_name}
+                  </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                  {guest.document_id || "-"}
+                <td className="p-3 text-gray-600">{g.document_id || "-"}</td>
+                <td className="p-3 text-sm">
+                  {(g.email || g.phone) ? (
+                    <div className="space-y-1">
+                      {g.email && <div className="flex items-center gap-1"><Mail size={12} /> {g.email}</div>}
+                      {g.phone && <div className="flex items-center gap-1"><Phone size={12} /> {g.phone}</div>}
+                    </div>
+                  ) : <span className="text-gray-400">-</span>}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                  {guest.email || "-"}
+                <td className="p-3 text-gray-600">{g.country}</td>
+                <td className="p-3">
+                  {g.notes && <div title={g.notes}><FileText size={16} className="text-gray-400 cursor-help" /></div>}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                  {guest.phone || "-"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                  {guest.country || "-"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {guest.is_active ? (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                      Activo
-                    </span>
-                  ) : (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                      Inactivo
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right font-medium">
-                  <button
-                    onClick={() => openModal(guest)}
-                    className="text-indigo-600 hover:text-indigo-900 mr-4"
-                  >
-                    Editar
+                <td className="p-3 text-right space-x-2">
+                  <button onClick={() => openEdit(g)} className="text-blue-600 hover:bg-blue-50 p-1 rounded">
+                    <Edit size={16} />
                   </button>
-                  <button
-                    onClick={() => handleDelete(guest.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    Eliminar
+                  <button onClick={() => handleDelete(g.id)} className="text-red-600 hover:bg-red-50 p-1 rounded">
+                    <Trash2 size={16} />
                   </button>
                 </td>
               </tr>
             ))}
-
-            {filteredGuests.length === 0 && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-6 py-4 text-center text-gray-400 text-sm"
-                >
-                  No hay huéspedes registrados todavía.
-                </td>
-              </tr>
+            {filtered.length === 0 && (
+              <tr><td colSpan={6} className="p-8 text-center text-gray-400">No se encontraron huéspedes.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-          <div className="relative mx-auto p-8 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-            <h3 className="text-xl font-semibold mb-4">
-              {selectedGuest ? "Editar Huésped" : "Nuevo Huésped"}
-            </h3>
-
-            {error && (
-              <p className="text-red-500 bg-red-100 p-2 rounded-md mb-4 text-sm">
-                {error}
-              </p>
-            )}
-
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg">
+            <h3 className="text-lg font-bold mb-4">{editingGuest ? "Editar Huésped" : "Nuevo Huésped"}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Nombre Completo <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  required
-                />
+                <label className="block text-sm font-medium">Nombre Completo *</label>
+                <input type="text" required value={formName} onChange={e => setFormName(e.target.value)} className="w-full border p-2 rounded" placeholder="Ej: Juan Pérez" />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Documento (RUT, DNI, Pasaporte)
-                  </label>
-                  <input
-                    type="text"
-                    name="document_id"
-                    value={formData.document_id}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                  />
+                  <label className="block text-sm font-medium">Documento (RUT/DNI)</label>
+                  <input type="text" value={formDoc} onChange={e => setFormDoc(e.target.value)} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    País
-                  </label>
-                  <input
-                    type="text"
-                    name="country"
-                    value={formData.country}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                  />
+                  <label className="block text-sm font-medium">País</label>
+                  <input type="text" value={formCountry} onChange={e => setFormCountry(e.target.value)} className="w-full border p-2 rounded" />
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                  />
+                  <label className="block text-sm font-medium">Email</label>
+                  <input type="email" value={formEmail} onChange={e => setFormEmail(e.target.value)} className="w-full border p-2 rounded" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Teléfono
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                  />
+                  <label className="block text-sm font-medium">Teléfono</label>
+                  <input type="text" value={formPhone} onChange={e => setFormPhone(e.target.value)} className="w-full border p-2 rounded" />
                 </div>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Notas Internas
-                </label>
-                <textarea
-                  name="notes"
-                  value={formData.notes}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                />
+                <label className="block text-sm font-medium">Notas</label>
+                <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} className="w-full border p-2 rounded h-20"></textarea>
               </div>
-
-              <div className="flex items-center">
-                <input
-                  id="is_active"
-                  name="is_active"
-                  type="checkbox"
-                  checked={formData.is_active}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                />
-                <label
-                  htmlFor="is_active"
-                  className="ml-2 block text-sm text-gray-900"
-                >
-                  Huésped activo
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
-                >
-                  Guardar
-                </button>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Guardar</button>
               </div>
             </form>
           </div>

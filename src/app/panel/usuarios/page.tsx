@@ -1,3 +1,10 @@
+import UsuariosClient from "./UsuariosClient";
+
 export default function UsuariosPage() {
-  return <h1 className="text-2xl font-bold">Usuarios</h1>;
+  return (
+    <div className="p-6">
+      <h1 className="text-3xl font-bold mb-6">Gestión de Usuarios</h1>
+      <UsuariosClient />
+    </div>
+  );
 }
