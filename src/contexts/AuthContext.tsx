@@ -10,7 +10,8 @@ import {
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
-type UserRole = "superadmin" | "recepcion" | "housekeeping";
+// Define UserRole
+export type UserRole = "superadmin" | "recepcion" | "housekeeping";
 
 export type AuthUser = {
     id: string;
@@ -80,13 +81,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     return;
                 }
 
-                // IMPORTANTE:
-                // Asumimos que la tabla hostal_users tiene una columna id que coincide con auth.user.id
-                // y una columna role con valores 'superadmin' | 'recepcion' | 'housekeeping'.
+                // Query hostal_users using supabase_user_id
                 const { data: profile, error: profileError } = await supabase
                     .from("hostal_users")
                     .select("role, full_name")
-                    .eq("id", user.id)
+                    .eq("supabase_user_id", user.id)
                     .maybeSingle();
 
                 if (profileError) {
@@ -134,22 +133,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 return;
             }
 
-            // Opcional: recargar rol cada vez que cambie la sesión, o reusar la info
-            // Por simplicidad, seteamos lo basico, y loadSession correra de nuevo o podemos hacer fetch
-            // pero lo mas robusto es hacer fetch siempre si cambio el usuario
-            // Aunque este listener puede dispararse con la misma sesion
-
             // Para asegurar full_name, idealmente hacemos fetch
             (async () => {
                 const { data: profile } = await supabase
                     .from("hostal_users")
                     .select("role, full_name")
-                    .eq("id", session.user!.id)
+                    .eq("supabase_user_id", session.user.id)
                     .maybeSingle();
 
                 const authUser: AuthUser = {
-                    id: session.user!.id,
-                    email: session.user!.email ?? null,
+                    id: session.user.id,
+                    email: session.user.email ?? null,
                     full_name: profile?.full_name ?? null
                 };
 
@@ -182,13 +176,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (error) throw error;
             if (!data.user) throw new Error("No user returned after sign in");
 
-            // Forzar recarga de estado o dejar que el listener actúe
-            // Pero el listener a veces tiene delay.
-            // Hacemos router push
-            router.push("/panel");
+            router.push("/panel/libro-dia");
         } catch (e) {
             console.error(e);
-            throw e;
+            throw e; // Login page handles this error
         } finally {
             setLoading(false);
         }
