@@ -1,64 +1,92 @@
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/server";
 
 export type DashboardStats = {
-    occupancyPercentage: number;
-    arrivalsToday: number;
-    departuresToday: number;
-    incomeToday: number;
+    occupancyTodayPercent: number;
+    occupiedRoomsToday: number;
+    totalRooms: number;
+    pendingCheckinsToday: number;
+    monthlyIncome: number;
 };
 
-export async function getDashboardStats(): Promise<DashboardStats> {
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+export async function getDashboardStats(today: string): Promise<DashboardStats> {
+    const supabase = createClient();
 
-    // 1. Total habitaciones activas
-    const { count: totalRooms } = await supabase
+    // 1. Total Rooms (Active)
+    // Assuming 'archivada' means removed/inactive.
+    const { count: totalRooms, error: roomsError } = await supabase
         .from("hostal_rooms")
-        .select("*", { count: "exact", head: true })
-        .eq("is_active", true);
+        .select("id", { count: "exact", head: true })
+        .neq("status", "archivada");
 
-    // 2. Habitaciones ocupadas hoy (reservas que incluyen 'today' en su rango y están confirmadas/checkin)
-    // Simplificación: Check si hay reservas con estado "confirmed" o "checked_in" que pasen por hoy.
-    // Como es complejo filtrar rangos exactos en una sola query simple, haremos una aproximacion:
-    // Reservas donde check_in <= today AND check_out > today
-    // (Asumiendo que si sales hoy, ya no cuenta como ocupada la noche de hoy, o depende del criterio hora. Usualmente checkout libera).
+    if (roomsError) {
+        console.error("Error fetching total rooms:", roomsError);
+    }
 
-    const { count: occupied } = await supabase
+    const safeTotalRooms = totalRooms ?? 0;
+
+    // 2. Occupied Rooms Today
+    // Logic: check_in <= today < check_out
+    // Status NOT IN ('cancelled', 'blocked', 'checked_out', 'deleted')
+    // We include 'pending', 'confirmed', 'checked_in'.
+    // 'pending' reservations occupy space on the calendar.
+    const { count: occupiedCount, error: occupError } = await supabase
         .from("hostal_reservations")
-        .select("*", { count: "exact", head: true })
-        .in("status", ["confirmed", "checked_in"])
+        .select("room_id", { count: "exact", head: true })
         .lte("check_in", today)
-        .gt("check_out", today);
+        .gt("check_out", today)
+        .not("status", "in", "('cancelled','blocked','checked_out')");
 
-    // 3. Llegadas hoy
-    const { count: arrivals } = await supabase
+    if (occupError) {
+        console.error("Error fetching occupied rooms:", occupError);
+    }
+
+    const safeOccupiedCount = occupiedCount ?? 0;
+
+    const occupancyTodayPercent = safeTotalRooms > 0
+        ? Number(((safeOccupiedCount / safeTotalRooms) * 100).toFixed(1))
+        : 0;
+
+    // 3. Pending Check-ins Today
+    // Logic: check_in == today AND status IN ('pending', 'confirmed')
+    const { count: pendingCheckins, error: pendingError } = await supabase
         .from("hostal_reservations")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("check_in", today)
-        .neq("status", "cancelled");
+        .in("status", ["pending", "confirmed"]);
 
-    // 4. Salidas hoy
-    const { count: departures } = await supabase
-        .from("hostal_reservations")
-        .select("*", { count: "exact", head: true })
-        .eq("check_out", today)
-        .neq("status", "cancelled");
+    if (pendingError) {
+        console.error("Error fetching pending checkins:", pendingError);
+    }
 
-    // 5. Pagos hoy
-    // Usamos hostal_payments.date si es el campo de negocio, o created_at si es por caja. El requerimiento dice "date".
-    const { data: payments } = await supabase
+    // 4. Monthly Income
+    const dateObj = new Date(today);
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth(); // 0-indexed
+
+    // First day of month
+    const startOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+
+    // Last day of month
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const endOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+
+    const { data: payments, error: paymentsError } = await supabase
         .from("hostal_payments")
         .select("amount")
-        .eq("date", today);
+        .gte("payment_date", startOfMonth)
+        .lte("payment_date", endOfMonth);
 
-    const totalIncome = payments?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
+    if (paymentsError) {
+        console.error("Error fetching payments:", paymentsError);
+    }
 
-    const roomCount = totalRooms || 1; // Evitar division por 0
-    const occupancyPercentage = Math.round(((occupied || 0) / roomCount) * 100);
+    const monthlyIncome = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) ?? 0;
 
     return {
-        occupancyPercentage,
-        arrivalsToday: arrivals || 0,
-        departuresToday: departures || 0,
-        incomeToday: totalIncome,
+        occupancyTodayPercent,
+        occupiedRoomsToday: safeOccupiedCount,
+        totalRooms: safeTotalRooms,
+        pendingCheckinsToday: pendingCheckins ?? 0,
+        monthlyIncome,
     };
 }

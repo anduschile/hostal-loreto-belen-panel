@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Modal from "@/components/Modal";
 import { HostalRoom } from "@/types/hostal";
+import { toast } from "sonner";
 
 type Props = {
     open: boolean;
@@ -18,7 +19,9 @@ type Props = {
         annex: string | null;
         notes: string | null;
         status: string;
+        default_rate: number | null;
     }) => void | Promise<void>;
+    onDelete?: () => void;
     saving?: boolean;
 };
 
@@ -27,6 +30,7 @@ export default function RoomFormModal({
     room,
     onClose,
     onSave,
+    onDelete,
     saving,
 }: Props) {
     const [name, setName] = useState("");
@@ -37,6 +41,7 @@ export default function RoomFormModal({
     const [annex, setAnnex] = useState<string>("");
     const [notes, setNotes] = useState<string>("");
     const [status, setStatus] = useState("disponible");
+    const [rate, setRate] = useState("");
 
     // Cargar datos cuando se abre con una habitación
     useEffect(() => {
@@ -51,6 +56,7 @@ export default function RoomFormModal({
             setAnnex(room.annex || "");
             setNotes(room.notes || "");
             setStatus(room.status || "disponible");
+            setRate(room.default_rate ? String(room.default_rate) : "");
         }
 
         if (!room && open) {
@@ -63,6 +69,7 @@ export default function RoomFormModal({
             setAnnex("");
             setNotes("");
             setStatus("disponible");
+            setRate("");
         }
     }, [room, open]);
 
@@ -70,26 +77,32 @@ export default function RoomFormModal({
         e.preventDefault();
 
         if (!name.trim()) {
-            alert("El nombre de la habitación es obligatorio.");
+            toast.error("El nombre de la habitación es obligatorio.");
             return;
         }
 
         if (!code.trim()) {
-            alert("El código de la habitación es obligatorio.");
+            toast.error("El código de la habitación es obligatorio.");
             return;
         }
 
-        await onSave({
-            id: room?.id,
-            name: name.trim(),
-            code: code.trim(),
-            room_type: roomType.toUpperCase(),
-            capacity_adults: Number(capacityAdults) || 0,
-            capacity_children: Number(capacityChildren) || 0,
-            annex: annex.trim() || null,
-            notes: notes.trim() || null,
-            status,
-        });
+        try {
+            await onSave({
+                id: room?.id,
+                name: name.trim(),
+                code: code.trim(),
+                room_type: roomType.toUpperCase(),
+                capacity_adults: Number(capacityAdults) || 0,
+                capacity_children: Number(capacityChildren) || 0,
+                annex: annex.trim() || null,
+                notes: notes.trim() || null,
+                status,
+                default_rate: rate ? Number(rate) : null,
+            });
+        } catch (error) {
+            console.error(error);
+            toast.error("Ocurrió un error al guardar la habitación.");
+        }
     };
 
     if (!open) return null;
@@ -200,6 +213,20 @@ export default function RoomFormModal({
 
                     <div>
                         <label className="block text-xs font-semibold text-gray-600 mb-1">
+                            Precio Base
+                        </label>
+                        <input
+                            type="number"
+                            min={0}
+                            className="w-full border rounded px-3 py-2 text-sm"
+                            value={rate}
+                            onChange={(e) => setRate(e.target.value)}
+                            placeholder="$"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">
                             Anexo
                         </label>
                         <input
@@ -224,22 +251,37 @@ export default function RoomFormModal({
                 </div>
 
                 {/* Botones */}
-                <div className="flex justify-end gap-2 pt-2">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-3 py-2 rounded-md border text-xs font-semibold text-gray-600 hover:bg-gray-50"
-                        disabled={!!saving}
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        type="submit"
-                        className="px-4 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-60"
-                        disabled={!!saving}
-                    >
-                        {saving ? "Guardando..." : room ? "Guardar cambios" : "Crear habitación"}
-                    </button>
+                <div className="flex justify-between items-center pt-4 border-t">
+                    {room && onDelete ? (
+                        <button
+                            type="button"
+                            onClick={onDelete}
+                            className="px-3 py-2 rounded-md bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100"
+                            disabled={!!saving}
+                        >
+                            Eliminar
+                        </button>
+                    ) : (
+                        <div></div> // Spacer
+                    )}
+
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-3 py-2 rounded-md border text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                            disabled={!!saving}
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 rounded-md bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-60"
+                            disabled={!!saving}
+                        >
+                            {saving ? "Guardando..." : room ? "Guardar cambios" : "Crear habitación"}
+                        </button>
+                    </div>
                 </div>
             </form>
         </Modal>

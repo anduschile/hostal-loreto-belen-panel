@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { HostalRoom } from "@/types/hostal";
 import { formatCurrencyCLP } from "@/lib/formatters";
 import { Users, Edit, Trash2, Plus } from "lucide-react";
+import { toast } from "sonner";
+import RoomFormModal from "@/components/habitaciones/RoomFormModal";
 
 type Props = {
     initialRooms: HostalRoom[];
@@ -17,14 +19,9 @@ export default function RoomsClient({ initialRooms }: Props) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRoom, setEditingRoom] = useState<HostalRoom | null>(null);
 
-    // Form State
-    const [formName, setFormName] = useState("");
-    const [formCode, setFormCode] = useState("");
-    const [formType, setFormType] = useState("Matrimonial");
-    const [formCapacity, setFormCapacity] = useState("2");
-    const [formRate, setFormRate] = useState("");
-    const [formStatus, setFormStatus] = useState("disponible");
-    const [formNotes, setFormNotes] = useState("");
+    // States for UX
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const filtered = rooms.filter(r =>
         r.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -33,67 +30,68 @@ export default function RoomsClient({ initialRooms }: Props) {
 
     const openNew = () => {
         setEditingRoom(null);
-        setFormName("");
-        setFormCode("");
-        setFormType("Matrimonial");
-        setFormCapacity("2");
-        setFormRate("");
-        setFormStatus("disponible");
-        setFormNotes("");
         setIsModalOpen(true);
     };
 
     const openEdit = (room: HostalRoom) => {
         setEditingRoom(room);
-        setFormName(room.name);
-        setFormCode(room.code);
-        setFormType(room.room_type);
-        setFormCapacity(String(room.capacity_adults));
-        setFormRate(room.default_rate ? String(room.default_rate) : "");
-        setFormStatus(room.status);
-        setFormNotes(room.notes || "");
         setIsModalOpen(true);
     };
 
     const handleDelete = async (id: number) => {
         if (!confirm("¿Eliminar esta habitación?")) return;
+
+        const toastId = toast.loading("Eliminando habitación...");
+        setIsDeleting(true);
+
         try {
             const res = await fetch(`/api/rooms?id=${id}`, { method: "DELETE" });
             if (!res.ok) throw new Error("Error al eliminar");
+
             setRooms(prev => prev.filter(r => r.id !== id));
+            toast.success("Habitación eliminada correctamente", { id: toastId });
             router.refresh();
-        } catch (e) {
-            alert("Error al eliminar");
+            setIsModalOpen(false);
+        } catch (e: any) {
+            toast.error(e.message || "No se pudo eliminar la habitación", { id: toastId });
+            console.error(e);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const payload = {
-            name: formName,
-            code: formCode || formName.slice(0, 3).toUpperCase(),
-            room_type: formType,
-            capacity_adults: Number(formCapacity),
-            capacity_children: 0,
-            default_rate: formRate ? Number(formRate) : null,
-            status: formStatus,
-            notes: formNotes,
-            currency: "CLP"
-        };
+    const handleSave = async (payload: any) => {
+        const toastId = toast.loading(editingRoom ? "Guardando cambios..." : "Creando habitación...");
+        setIsSubmitting(true);
 
         try {
+            const dataToSend = {
+                name: payload.name,
+                code: payload.code,
+                room_type: payload.room_type,
+                capacity_adults: payload.capacity_adults,
+                capacity_children: payload.capacity_children,
+                default_rate: payload.default_rate,
+                status: payload.status,
+                notes: payload.notes,
+                annex: payload.annex,
+                currency: "CLP"
+            };
+
             let res;
             if (editingRoom) {
+                // Update
                 res = await fetch("/api/rooms", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ id: editingRoom.id, ...payload })
+                    body: JSON.stringify({ id: editingRoom.id, ...dataToSend })
                 });
             } else {
+                // Create
                 res = await fetch("/api/rooms", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(dataToSend)
                 });
             }
 
@@ -102,13 +100,17 @@ export default function RoomsClient({ initialRooms }: Props) {
 
             if (editingRoom) {
                 setRooms(prev => prev.map(r => r.id === json.data.id ? json.data : r));
+                toast.success("Habitación actualizada", { id: toastId });
             } else {
                 setRooms(prev => [...prev, json.data].sort((a, b) => a.id - b.id));
+                toast.success("Habitación creada con éxito", { id: toastId });
             }
             setIsModalOpen(false);
             router.refresh();
         } catch (e: any) {
-            alert(e.message);
+            toast.error(e.message || "Error al guardar la habitación", { id: toastId });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -159,6 +161,7 @@ export default function RoomsClient({ initialRooms }: Props) {
                                 <td className="p-3">
                                     <div className="flex items-center gap-1 text-gray-600">
                                         <Users size={14} /> {r.capacity_adults}
+                                        {r.capacity_children > 0 && <span className="text-xs text-gray-400"> + {r.capacity_children} niñ.</span>}
                                     </div>
                                 </td>
                                 <td className="p-3 font-medium">{formatCurrencyCLP(r.default_rate)}</td>
@@ -168,10 +171,18 @@ export default function RoomsClient({ initialRooms }: Props) {
                                     </span>
                                 </td>
                                 <td className="p-3 text-right space-x-2">
-                                    <button onClick={() => openEdit(r)} className="text-blue-600 hover:bg-blue-50 p-1 rounded">
+                                    <button
+                                        onClick={() => openEdit(r)}
+                                        disabled={isDeleting}
+                                        className="text-blue-600 hover:bg-blue-50 p-1 rounded disabled:opacity-50"
+                                    >
                                         <Edit size={16} />
                                     </button>
-                                    <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:bg-red-50 p-1 rounded">
+                                    <button
+                                        onClick={() => handleDelete(r.id)}
+                                        disabled={isDeleting}
+                                        className="text-red-600 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                                    >
                                         <Trash2 size={16} />
                                     </button>
                                 </td>
@@ -185,60 +196,14 @@ export default function RoomsClient({ initialRooms }: Props) {
             </div>
 
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-                        <h3 className="text-lg font-bold mb-4">{editingRoom ? "Editar Habitación" : "Nueva Habitación"}</h3>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium">Nombre *</label>
-                                <input type="text" required value={formName} onChange={e => setFormName(e.target.value)} className="w-full border p-2 rounded" placeholder="Ej: Matrimonial 101" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium">Código</label>
-                                    <input type="text" value={formCode} onChange={e => setFormCode(e.target.value)} className="w-full border p-2 rounded" placeholder="Ej: MAT101" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium">Tipo *</label>
-                                    <select value={formType} onChange={e => setFormType(e.target.value)} className="w-full border p-2 rounded">
-                                        <option>Matrimonial</option>
-                                        <option>Doble</option>
-                                        <option>Triple</option>
-                                        <option>Cuadruple</option>
-                                        <option>Departamento</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium">Capacidad *</label>
-                                    <input type="number" min="1" required value={formCapacity} onChange={e => setFormCapacity(e.target.value)} className="w-full border p-2 rounded" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium">Precio Base</label>
-                                    <input type="number" min="0" value={formRate} onChange={e => setFormRate(e.target.value)} className="w-full border p-2 rounded" placeholder="$" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium">Estado *</label>
-                                <select value={formStatus} onChange={e => setFormStatus(e.target.value)} className="w-full border p-2 rounded">
-                                    <option value="disponible">Disponible</option>
-                                    <option value="ocupada">Ocupada</option>
-                                    <option value="mantenimiento">Mantenimiento</option>
-                                    <option value="limpieza">Limpieza</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium">Notas</label>
-                                <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} className="w-full border p-2 rounded h-20"></textarea>
-                            </div>
-                            <div className="flex justify-end gap-2 pt-4 border-t">
-                                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Guardar</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <RoomFormModal
+                    open={isModalOpen}
+                    room={editingRoom}
+                    onClose={() => setIsModalOpen(false)}
+                    onSave={handleSave}
+                    onDelete={editingRoom ? () => handleDelete(editingRoom.id) : undefined}
+                    saving={isSubmitting}
+                />
             )}
         </div>
     );

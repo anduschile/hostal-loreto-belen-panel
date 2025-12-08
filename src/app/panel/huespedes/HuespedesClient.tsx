@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Guest } from "@/types/hostal";
 import { User, Edit, Trash2, Plus, Search, Mail, Phone, FileText } from "lucide-react";
+import { toast } from "sonner";
 
 type Props = {
   initialGuests: Guest[];
@@ -15,6 +16,10 @@ export default function HuespedesClient({ initialGuests }: Props) {
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
+
+  // UX State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form State
   const [formName, setFormName] = useState("");
@@ -57,13 +62,21 @@ export default function HuespedesClient({ initialGuests }: Props) {
 
   const handleDelete = async (id: number) => {
     if (!confirm("¿Eliminar este huésped?")) return;
+
+    const toastId = toast.loading("Eliminando huésped...");
+    setIsDeleting(true);
+
     try {
       const res = await fetch(`/api/guests?id=${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Error al eliminar");
+
       setGuests(prev => prev.filter(g => g.id !== id));
+      toast.success("Huésped eliminado correctamente", { id: toastId });
       router.refresh();
     } catch (e) {
-      alert("Error al eliminar");
+      toast.error("No se pudo eliminar al huésped", { id: toastId });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -78,6 +91,9 @@ export default function HuespedesClient({ initialGuests }: Props) {
       notes: formNotes,
       is_active: true
     };
+
+    const toastId = toast.loading(editingGuest ? "Guardando cambios..." : "Creando huésped...");
+    setIsSubmitting(true);
 
     try {
       let res;
@@ -100,13 +116,17 @@ export default function HuespedesClient({ initialGuests }: Props) {
 
       if (editingGuest) {
         setGuests(prev => prev.map(g => g.id === json.data.id ? json.data : g));
+        toast.success("Huésped actualizado", { id: toastId });
       } else {
         setGuests(prev => [...prev, json.data].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+        toast.success("Huésped creado con éxito", { id: toastId });
       }
       setIsModalOpen(false);
       router.refresh();
     } catch (e: any) {
-      alert(e.message);
+      toast.error(e.message || "Error al guardar el huésped", { id: toastId });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -165,10 +185,18 @@ export default function HuespedesClient({ initialGuests }: Props) {
                   {g.notes && <div title={g.notes}><FileText size={16} className="text-gray-400 cursor-help" /></div>}
                 </td>
                 <td className="p-3 text-right space-x-2">
-                  <button onClick={() => openEdit(g)} className="text-blue-600 hover:bg-blue-50 p-1 rounded">
+                  <button
+                    onClick={() => openEdit(g)}
+                    disabled={isDeleting}
+                    className="text-blue-600 hover:bg-blue-50 p-1 rounded disabled:opacity-50"
+                  >
                     <Edit size={16} />
                   </button>
-                  <button onClick={() => handleDelete(g.id)} className="text-red-600 hover:bg-red-50 p-1 rounded">
+                  <button
+                    onClick={() => handleDelete(g.id)}
+                    disabled={isDeleting}
+                    className="text-red-600 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </td>
@@ -215,8 +243,21 @@ export default function HuespedesClient({ initialGuests }: Props) {
                 <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} className="w-full border p-2 rounded h-20"></textarea>
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Guardar</button>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                  disabled={isSubmitting}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-70 flex items-center gap-2"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Guardando..." : "Guardar"}
+                </button>
               </div>
             </form>
           </div>

@@ -34,7 +34,7 @@ export default function RoomsGrid({ initialRooms }: Props) {
     const handleUpdateStatus = async (id: number, status: string) => {
         // Optimista
         setRooms((prev) =>
-            prev.map((r) => (r.id === id ? { ...r, status } : r))
+            prev.map((r) => (r.id === id ? { ...r, status: status as any } : r))
         );
 
         try {
@@ -63,6 +63,7 @@ export default function RoomsGrid({ initialRooms }: Props) {
         annex: string | null;
         notes: string | null;
         status: string;
+        default_rate: number | null;
     }) => {
         setSaving(true);
         try {

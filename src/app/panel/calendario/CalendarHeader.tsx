@@ -14,9 +14,10 @@ type Props = {
     onViewModeChange: (mode: ViewMode) => void;
     onFilterChange: (filters: { status: string; roomType: string }) => void;
     loading?: boolean;
+    roomTypes?: string[];
 };
 
-export default function CalendarHeader({ currentDate, onDateChange, viewMode, onViewModeChange, onFilterChange, loading }: Props) {
+export default function CalendarHeader({ currentDate, onDateChange, viewMode, onViewModeChange, onFilterChange, loading, roomTypes }: Props) {
     const [statusFilter, setStatusFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
 
@@ -101,8 +102,8 @@ export default function CalendarHeader({ currentDate, onDateChange, viewMode, on
                             key={m}
                             onClick={() => onViewModeChange(m)}
                             className={`px-4 py-1.5 rounded-md text-xs font-bold capitalize ${viewMode === m
-                                    ? "bg-white shadow-sm text-blue-600"
-                                    : "text-gray-500 hover:text-gray-900"
+                                ? "bg-white shadow-sm text-blue-600"
+                                : "text-gray-500 hover:text-gray-900"
                                 }`}
                         >
                             {m === "day" ? "Día" : m === "week" ? "Semana" : "Mes"}
@@ -139,10 +140,18 @@ export default function CalendarHeader({ currentDate, onDateChange, viewMode, on
                     className="bg-gray-50 border-gray-200 rounded text-xs py-1 px-2"
                 >
                     <option value="all">Todas las habitaciones</option>
-                    <option value="matrimonial">Matrimonial</option>
-                    <option value="doble">Doble</option>
-                    <option value="triple">Triple</option>
-                    <option value="cuadruple">Cuádruple</option>
+                    {roomTypes && roomTypes.length > 0 ? (
+                        roomTypes.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                        ))
+                    ) : (
+                        <>
+                            <option value="MATRIMONIAL">Matrimonial</option>
+                            <option value="DOBLE">Doble</option>
+                            <option value="TRIPLE">Triple</option>
+                            <option value="CUADRUPLE">Cuádruple</option>
+                        </>
+                    )}
                 </select>
             </div>
         </div>

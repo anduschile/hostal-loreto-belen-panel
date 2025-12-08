@@ -14,7 +14,7 @@ export default function RoomCard({ room, onEdit, onUpdateStatus }: Props) {
 
     const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const newStatus = e.target.value;
-        setLocalStatus(newStatus);
+        setLocalStatus(newStatus as any);
         onUpdateStatus(room.id, newStatus);
     };
 

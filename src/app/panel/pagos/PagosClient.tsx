@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Payment } from "@/types/hostal";
 import { formatCurrencyCLP } from "@/lib/formatters";
+import { toast } from "sonner";
 
 type Props = {
   initialPayments: Payment[];
@@ -24,6 +25,10 @@ export default function PagosClient({
   // Estado del modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+
+  // States for UX
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form states
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
@@ -76,6 +81,9 @@ export default function PagosClient({
   const handleDelete = async (id: number) => {
     if (!confirm("¿Estás seguro de eliminar este pago?")) return;
 
+    const toastId = toast.loading("Eliminando pago...");
+    setIsDeleting(true);
+
     try {
       const res = await fetch(`/api/payments?id=${id}`, { method: "DELETE" });
       const data = await res.json();
@@ -83,14 +91,22 @@ export default function PagosClient({
       if (!data.ok) throw new Error(data.error || "Error al eliminar");
 
       setPayments((prev) => prev.filter((p) => p.id !== id));
+      toast.success("Pago eliminado correctamente", { id: toastId });
       router.refresh();
     } catch (error: any) {
-      alert(error.message);
+      toast.error(error.message || "Error al eliminar", { id: toastId });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formReservationId) {
+      toast.error("Debes asociar una reserva al pago (ID Reserva obligatorio)");
+      return;
+    }
 
     const payload = {
       payment_date: formDate,
@@ -99,10 +115,13 @@ export default function PagosClient({
       document_type: formDocumentType,
       document_number: formDocumentNumber || null,
       notes: formNotes,
-      reservation_id: formReservationId ? Number(formReservationId) : null,
+      reservation_id: Number(formReservationId),
       guest_id: formGuestId ? Number(formGuestId) : null,
       company_id: formCompanyId ? Number(formCompanyId) : null,
     };
+
+    const toastId = toast.loading(editingPayment ? "Actualizando pago..." : "Registrando pago...");
+    setIsSubmitting(true);
 
     try {
       let res;
@@ -134,14 +153,18 @@ export default function PagosClient({
 
       if (editingPayment) {
         setPayments(prev => prev.map(p => p.id === data.data.id ? data.data : p));
+        toast.success("Pago actualizado", { id: toastId });
       } else {
         setPayments(prev => [data.data, ...prev]);
+        toast.success("Pago registrado correctamente", { id: toastId });
       }
 
       setIsModalOpen(false);
       router.refresh();
     } catch (error: any) {
-      alert(error.message);
+      toast.error(error.message || "Error al guardar", { id: toastId });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -341,27 +364,37 @@ export default function PagosClient({
               <div>
                 <label className="block text-sm font-medium">Asociar a (IDs Opcionales)</label>
                 <div className="grid grid-cols-3 gap-2">
-                  <input
-                    type="number"
-                    placeholder="ID Reserva"
-                    value={formReservationId}
-                    onChange={e => setFormReservationId(e.target.value)}
-                    className="border p-2 rounded text-sm"
-                  />
-                  <input
-                    type="number"
-                    placeholder="ID Huésped"
-                    value={formGuestId}
-                    onChange={e => setFormGuestId(e.target.value)}
-                    className="border p-2 rounded text-sm"
-                  />
-                  <input
-                    type="number"
-                    placeholder="ID Empresa"
-                    value={formCompanyId}
-                    onChange={e => setFormCompanyId(e.target.value)}
-                    className="border p-2 rounded text-sm"
-                  />
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">ID Reserva *</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="Req *"
+                      value={formReservationId}
+                      onChange={e => setFormReservationId(e.target.value)}
+                      className="w-full border p-2 rounded text-sm border-blue-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">ID Huésped</label>
+                    <input
+                      type="number"
+                      placeholder="Opcional"
+                      value={formGuestId}
+                      onChange={e => setFormGuestId(e.target.value)}
+                      className="w-full border p-2 rounded text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">ID Empresa</label>
+                    <input
+                      type="number"
+                      placeholder="Opcional"
+                      value={formCompanyId}
+                      onChange={e => setFormCompanyId(e.target.value)}
+                      className="w-full border p-2 rounded text-sm"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -379,14 +412,16 @@ export default function PagosClient({
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                  disabled={isSubmitting}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-70 flex items-center gap-2"
+                  disabled={isSubmitting}
                 >
-                  Guardar
+                  {isSubmitting ? "Guardando..." : "Guardar"}
                 </button>
               </div>
             </form>
