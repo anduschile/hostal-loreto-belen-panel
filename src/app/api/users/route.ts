@@ -1,12 +1,15 @@
-import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseClient";
 
-export async function GET(req: Request) {
+import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { createClient } from "@supabase/supabase-js";
+
+// GET: List users
+export async function GET() {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from("hostal_users")
             .select("*")
-            .order("id", { ascending: true });
+            .order("created_at", { ascending: false });
 
         if (error) throw error;
 
@@ -16,81 +19,44 @@ export async function GET(req: Request) {
     }
 }
 
+// POST: Create User
 export async function POST(req: Request) {
     try {
         const body = await req.json();
+        const { email, password, full_name, role } = body;
 
-        // Validaciones basicas
-        if (!body.full_name || !body.email || !body.role) {
-            return NextResponse.json({ error: "Faltan datos obligatorios" }, { status: 400 });
-        }
+        // 1. Create in Supabase Auth
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: { full_name, role },
+        });
 
-        const { data, error } = await supabase
+        if (authError) throw authError;
+        if (!authData.user) throw new Error("User creation failed in Auth");
+
+        const userId = authData.user.id;
+
+        // 2. Insert into hostal_users
+        const { error: dbError } = await supabaseAdmin
             .from("hostal_users")
             .insert({
-                full_name: body.full_name,
-                email: body.email,
-                role: body.role,
-                is_active: body.is_active ?? true
-            })
-            .select()
-            .single();
+                supabase_user_id: userId,
+                email,
+                full_name,
+                role,
+            });
 
-        if (error) throw error;
+        if (dbError) {
+            // Rollback: delete auth user if DB insert fails
+            await supabaseAdmin.auth.admin.deleteUser(userId);
+            throw dbError;
+        }
 
-        return NextResponse.json(data, { status: 201 });
+        return NextResponse.json({ success: true, user: authData.user });
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-}
-
-export async function PUT(req: Request) {
-    try {
-        const body = await req.json();
-
-        if (!body.id) return NextResponse.json({ error: "ID requerido" }, { status: 400 });
-
-        const { data, error } = await supabase
-            .from("hostal_users")
-            .update({
-                full_name: body.full_name,
-                email: body.email,
-                role: body.role,
-                is_active: body.is_active,
-                updated_at: new Date().toISOString()
-            })
-            .eq("id", body.id)
-            .select()
-            .single();
-
-        if (error) throw error;
-
-        return NextResponse.json(data);
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-}
-
-export async function DELETE(req: Request) {
-    try {
-        const { searchParams } = new URL(req.url);
-        const id = searchParams.get("id");
-
-        if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 });
-
-        // Borrado logico (opcional) o fisico. El requerimiento dice "eliminar o marcar inactivo".
-        // Hare borrado fisico si el usuario lo desea, pero por integridad a veces es mejor inactivo.
-        // Voy a implementar borrado fisico pues la tabla tiene is_active para borrado logico via PUT.
-
-        const { error } = await supabase
-            .from("hostal_users")
-            .delete()
-            .eq("id", id);
-
-        if (error) throw error;
-
-        return NextResponse.json({ success: true });
-    } catch (error: any) {
+        console.error("Error creating user:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
