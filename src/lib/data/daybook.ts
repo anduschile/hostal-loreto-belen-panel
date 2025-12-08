@@ -51,7 +51,8 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
       invoice_status, invoice_number, invoice_date, notes, adults, children, source, companions_json,
       arrival_time, breakfast_time,
       hostal_rooms (name, room_type, sort_order),
-      hostal_guests (full_name)
+      hostal_guests (full_name),
+      hostal_companies (name)
     `)
         .lte("check_in", date)
         .gte("check_out", date)
@@ -69,7 +70,7 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
         room_name: row.hostal_rooms?.name || `Hab ${row.room_id}`,
         room_type: row.hostal_rooms?.room_type || "Estándar",
         guest_name: row.hostal_guests?.full_name || "Sin Huésped",
-        company_name: null,
+        company_name: row.hostal_companies?.name || null,
         check_in: row.check_in,
         check_out: row.check_out,
         status: row.status,
