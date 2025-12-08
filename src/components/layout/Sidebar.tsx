@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import {
     LayoutDashboard,
     CalendarDays,
@@ -15,6 +16,7 @@ import {
     Settings,
     Menu,
     X,
+    LogOut,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -27,14 +29,20 @@ const navItems = [
     { label: "Empresas", href: "/panel/empresas", icon: Building2 },
     { label: "Pagos", href: "/panel/pagos", icon: CreditCard },
     { label: "Reportes", href: "/panel/reportes", icon: BarChart3 },
-    { label: "Usuarios", href: "/panel/usuarios", icon: Settings },
+    // "Usuarios" will be conditionally rendered
+    { label: "Usuarios", href: "/panel/usuarios", icon: Settings, roleRequired: "superadmin" },
 ];
 
 export default function Sidebar() {
     const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
+    const { user, role, signOut, loading } = useAuth(); // Consume AuthContext
 
     const toggleSidebar = () => setIsOpen(!isOpen);
+
+    // If still loading auth state, we might show a skeleton or nothing, 
+    // but sidebar is usually static enough. 
+    // Ideally we wait for role to be definitive before showing/hiding admin items.
 
     return (
         <>
@@ -85,10 +93,11 @@ export default function Sidebar() {
                 {/* Navigation */}
                 <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
                     {navItems.map((item) => {
-                        // Check if active: exact match for /panel or startsWith for subroutes (e.g., /panel/calendario)
-                        // Special case: /panel should also be active if pathname is /panel/dashboard (if internal redirect happens client-side)
-                        // but since we redirect logic, just standard startsWith/exact match is okay.
-                        // However, to prevent "/panel" matching everything, we do exact match for root "/panel".
+                        // Role check
+                        if (item.roleRequired && role !== item.roleRequired) {
+                            return null;
+                        }
+
                         const isActive = item.href === "/panel"
                             ? pathname === "/panel" || pathname === "/panel/dashboard"
                             : pathname.startsWith(item.href);
@@ -116,13 +125,23 @@ export default function Sidebar() {
                 {/* Footer User Info */}
                 <div className="p-4 border-t border-slate-800">
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold ring-1 ring-slate-600">
-                            U
+                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold ring-1 ring-slate-600 shrink-0">
+                            {user?.email?.charAt(0).toUpperCase() || "U"}
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-medium text-slate-200">Usuario</span>
-                            <span className="text-xs text-slate-500">Administrador</span>
+                        <div className="flex flex-col overflow-hidden">
+                            <span className="text-sm font-medium text-slate-200 truncate" title={user?.full_name || user?.email || "Usuario"}>
+                                {user?.full_name?.split(" ")[0] || "Usuario"}
+                            </span>
+                            <span className="text-xs text-slate-500 capitalize">{role || "Cargando..."}</span>
                         </div>
+
+                        <button
+                            onClick={() => signOut()}
+                            className="ml-auto text-slate-500 hover:text-red-400 transition-colors"
+                            title="Cerrar sesión"
+                        >
+                            <LogOut size={16} />
+                        </button>
                     </div>
                 </div>
             </aside>

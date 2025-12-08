@@ -1,10 +1,35 @@
 "use client";
 
 import Sidebar from "@/components/layout/Sidebar";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [loading, user, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <Loader2 className="animate-spin h-8 w-8 text-emerald-600" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans">
+    <div className="flex min-h-screen bg-slate-100 font-sans text-slate-900">
       {/* Sidebar (Fixed) */}
       <Sidebar />
 
@@ -15,16 +40,13 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         {/* Header / Top bar placeholder */}
         <header className="bg-white border-b border-gray-200 px-4 py-4 md:px-8 flex justify-end md:justify-between items-center sticky top-0 z-30">
           <h2 className="text-lg font-semibold text-gray-800 hidden md:block">
-            {/* Title could be dynamic based on pathname if needed, 
-                            but usually pages render their own title blocks.
-                            Leaving empty or generic for now.
-                        */}
             Panel de Control
           </h2>
 
           <div className="flex items-center gap-4">
-            {/* Placeholder for user menu or notifications */}
-            <div className="text-sm text-gray-500">Hola, Usuario</div>
+            <div className="text-sm text-gray-500">
+              Hola, <span className="font-semibold text-gray-700">{user?.full_name?.split(" ")[0] || "Usuario"}</span>
+            </div>
           </div>
         </header>
 
