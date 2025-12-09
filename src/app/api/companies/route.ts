@@ -9,15 +9,6 @@ export async function GET() {
         const { data, error } = await supabaseAdmin
             .from("hostal_companies")
             .select("*")
-            .eq('is_active', true) // Only fetch active ones if we want to mimic the module, but the frontend filters too. Let's fetch all then frontend filters or filter here. The user said "Se apliquen los mismos filtros... is_active = true".
-            // Actually the frontend does `data.filter((c: any) => c.is_active)`. 
-            // Better to filter on DB side for performance, but to match existing frontend logic EXACTLY (which filters active), I can do it here. 
-            // However, the frontend currently fetches ALL then filters. 
-            // Let's just return all and let frontend filter, or return active. 
-            // Given the user said "Use the same source... hostal_companies", implies getting everything available.
-            // But usually for a dropdown we only want active.
-            // The frontend code `setCompanies(data.filter((c: any) => c.is_active));` implies the API returned inactive ones too previously.
-            // I will keep the select("*") but use admin.
             .order("name", { ascending: true });
 
         if (error) throw error;
