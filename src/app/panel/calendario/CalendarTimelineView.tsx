@@ -37,7 +37,7 @@ export default function CalendarTimelineView({
     return (
         <div className="flex-1 w-full h-full overflow-hidden flex flex-col bg-white">
             {/* Contenedor principal scrollable */}
-            <div className="flex-1 overflow-auto relative custom-scrollbar">
+            <div className="flex-1 overflow-x-auto overflow-y-auto relative custom-scrollbar">
 
                 {/* 
                     CONTENEDOR DEL CALENDARIO (min-w-fit para asegurar scroll horizontal) 
@@ -101,16 +101,17 @@ export default function CalendarTimelineView({
                                     bg-white/95 backdrop-blur para efecto moderno.
                                 */}
                                 <div className="
-                                    sticky left-0 z-30 
+                                    sticky left-0 z-20 
                                     min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
-                                    bg-slate-50 border-r border-gray-200 
-                                    p-3 flex flex-col justify-center 
+                                    bg-white dark:bg-slate-900 
+                                    border-r border-gray-200 
+                                    p-2 md:p-3 flex flex-col justify-center 
                                     shadow-[2px_0_10px_rgba(0,0,0,0.05)]
                                 ">
-                                    <div className="font-bold text-sm text-gray-800 leading-tight">
+                                    <div className="font-bold text-xs md:text-sm text-gray-800 dark:text-gray-100 leading-tight">
                                         {room.name}
                                     </div>
-                                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                         <span className="text-[9px] uppercase font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
                                             {room.type}
                                         </span>

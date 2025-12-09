@@ -98,25 +98,24 @@ export default function ReservationBlock({ reservation, style, onClick, viewMode
                 </div>
             ) : (
                 // WEEK/MONTH VIEW LAYOUT (Compact)
-                <>
-                    <div className="font-bold truncate leading-tight flex items-center gap-1">
-                        {reservation.guest_name}
+                <div className="flex flex-col h-full justify-center px-1">
+                    <div className="font-bold truncate leading-tight flex items-center gap-1 text-[10px] md:text-xs">
+                        {reservation.guest_name || "Sin huésped"}
                     </div>
 
-                    {(style?.width && parseInt(String(style.width)) > 60) && (
-                        <div className="flex flex-col">
-                            {reservation.company_name && (
-                                <span className="truncate opacity-80 text-[10px] flex items-center gap-1">
-                                    <Building2 size={8} /> {reservation.company_name}
-                                </span>
-                            )}
+                    <div className="text-[9px] md:text-[10px] text-gray-700/80 dark:text-gray-200/80 truncate flex items-center gap-0.5">
+                        {reservation.company_name_snapshot
+                            || reservation.company_name
+                            || (reservation.company_id ? "Empresa" : "Particular")}
+                    </div>
+
+                    {/* Price - hidden on very small blocks/mobile if needed, or kept absolute */}
+                    {(style?.width && parseInt(String(style.width)) > 50) && (
+                        <div className="absolute bottom-0.5 right-1 text-[8px] font-bold opacity-60 hidden sm:block">
+                            {formatCurrencyCLP(reservation.total_price).replace("$", "")}
                         </div>
                     )}
-
-                    <div className="absolute bottom-0.5 right-1 text-[9px] font-bold opacity-70">
-                        {formatCurrencyCLP(reservation.total_price).replace("$", "")}
-                    </div>
-                </>
+                </div>
             )}
 
             {/* --- TOOLTIP --- */}
