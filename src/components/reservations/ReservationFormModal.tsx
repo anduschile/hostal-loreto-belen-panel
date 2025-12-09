@@ -533,49 +533,7 @@ export default function ReservationFormModal({
         }
     };
 
-    // --- RENDER ---
-    // (Render logic continues...)
 
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-y-auto flex flex-col">
-                {/* HEADER */}
-                <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            {reservationToEdit ? <EditIcon /> : <PlusIcon />}
-                            {reservationToEdit ? "Editar Reserva" : "Nueva Reserva"}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                            Complete los datos solicitados
-                        </p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-                        type="button"
-                        disabled={isSubmitting || isDeleting}
-                    >
-                        <X size={20} className="text-gray-500" />
-                    </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
-                    {/* ... form content here ... */}
-                    {/* Since I am replacing logic, I should keep the body content as is, but I can't partially match the big block. */}
-                    {/* Wait, the replace tool works on line ranges. I should only replace the handlers and the footer. */}
-                    {/* The problem is that the JSX structure is interlieved in the previous viewer's output. */}
-                    {/* I will only replace the handleSubmit and Footer separately? */}
-                </form>
-            </div>
-        </div>
-    );
-    // WAIT! I should not replace the whole Render.
-    // I will replace `handleSubmit` definition and `Footer` section separately.
-
-    // First: Replace handleSubmit with handleSaveInternal, handleSubmit, and handleSaveAndSendVoucher.
 
 
     const handleDelete = async () => {
