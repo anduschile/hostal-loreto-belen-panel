@@ -166,9 +166,9 @@ export default function ReservationFormModal({
             const res = await fetch("/api/companies");
             if (res.ok) {
                 const data = await res.json();
-                // Filter active companies or show all if editing and the company is inactive?
-                // For now, let's just show active ones + the one currently selected if inactive
-                setCompanies(data.filter((c: any) => c.is_active));
+                // Filter active companies or show all? User requested ALL real companies.
+                // We load all of them. The autocomplete will filter by text.
+                setCompanies(data);
             }
         };
         loadCompanies();
