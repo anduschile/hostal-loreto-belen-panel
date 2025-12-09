@@ -43,7 +43,7 @@ export default function CalendarTimelineView({
                     CONTENEDOR DEL CALENDARIO (min-w-fit para asegurar scroll horizontal) 
                     relative para posicionar elementos absolutos dentro
                 */}
-                <div className="min-w-[1000px] flex flex-col relative pb-4">
+                <div className="min-w-[1000px] flex flex-col pb-4">
 
                     {/* 
                         HEADER: DÍAS (Sticky Top)
@@ -103,8 +103,7 @@ export default function CalendarTimelineView({
                                 <div className="
                                     sticky left-0 z-30 
                                     min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
-                                    bg-slate-50/95 backdrop-blur-sm
-                                    border-r border-gray-200 
+                                    bg-slate-50 border-r border-gray-200 
                                     p-3 flex flex-col justify-center 
                                     shadow-[2px_0_10px_rgba(0,0,0,0.05)]
                                 ">
@@ -124,7 +123,7 @@ export default function CalendarTimelineView({
                                 </div>
 
                                 {/* GRID DE RESERVAS */}
-                                <div className="flex flex-1 relative">
+                                <div className="flex flex-1 relative z-0">
                                     {/* Celdas de fondo (click para nueva reserva) */}
                                     {days.map((day) => (
                                         <div
