@@ -35,9 +35,9 @@ export default function CalendarTimelineView({
     const unitWidth = 100 / totalDays;
 
     return (
-        <div className="flex-1 w-full h-full overflow-hidden flex flex-col bg-white">
+        <div className="flex flex-col w-full bg-white">
             {/* Contenedor principal scrollable */}
-            <div className="flex-1 overflow-x-auto overflow-y-auto relative custom-scrollbar">
+            <div className="relative max-h-[calc(100vh-200px)] overflow-auto custom-scrollbar">
 
                 {/* 
                     CONTENEDOR DEL CALENDARIO (min-w-fit para asegurar scroll horizontal) 
@@ -58,10 +58,10 @@ export default function CalendarTimelineView({
                         <div className="
                             sticky left-0 top-0 z-50 
                             min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
-                            bg-slate-900 text-white
-                            border-r border-slate-700
+                            bg-white dark:bg-slate-900 
+                            border-r border-gray-200
                             flex items-center justify-center 
-                            text-xs font-bold uppercase tracking-wider
+                            text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-200
                             shadow-[4px_4px_10px_rgba(0,0,0,0.1)]
                         ">
                             Habitaciones
@@ -101,7 +101,7 @@ export default function CalendarTimelineView({
                                     bg-white/95 backdrop-blur para efecto moderno.
                                 */}
                                 <div className="
-                                    sticky left-0 z-20 
+                                    sticky left-0 z-30 
                                     min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
                                     bg-white dark:bg-slate-900 
                                     border-r border-gray-200 
