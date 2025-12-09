@@ -151,7 +151,10 @@ export default function ReservationFormModal({
         let list = companies;
         if (companySearch) {
             const lower = companySearch.toLowerCase();
-            list = companies.filter(c => c.name.toLowerCase().includes(lower));
+            list = companies.filter((c) =>
+                c.name.toLowerCase().includes(lower) ||
+                (c.rut && c.rut.toLowerCase().includes(lower))
+            );
         }
         return list.sort((a: any, b: any) => a.name.localeCompare(b.name));
     }, [companies, companySearch]);

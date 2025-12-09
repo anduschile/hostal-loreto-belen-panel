@@ -1,21 +1,23 @@
-
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-// Use standard client for data operations
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!; // Or Service Role if strict RLS
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
 // GET: List companies
 export async function GET() {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from("hostal_companies")
             .select("*")
+            .eq('is_active', true) // Only fetch active ones if we want to mimic the module, but the frontend filters too. Let's fetch all then frontend filters or filter here. The user said "Se apliquen los mismos filtros... is_active = true".
+            // Actually the frontend does `data.filter((c: any) => c.is_active)`. 
+            // Better to filter on DB side for performance, but to match existing frontend logic EXACTLY (which filters active), I can do it here. 
+            // However, the frontend currently fetches ALL then filters. 
+            // Let's just return all and let frontend filter, or return active. 
+            // Given the user said "Use the same source... hostal_companies", implies getting everything available.
+            // But usually for a dropdown we only want active.
+            // The frontend code `setCompanies(data.filter((c: any) => c.is_active));` implies the API returned inactive ones too previously.
+            // I will keep the select("*") but use admin.
             .order("name", { ascending: true });
 
         if (error) throw error;
@@ -56,7 +58,7 @@ export async function POST(req: Request) {
             updated_at: new Date().toISOString()
         };
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from("hostal_companies")
             .insert(companyData);
 
