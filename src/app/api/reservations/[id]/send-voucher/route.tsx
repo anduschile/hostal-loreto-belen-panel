@@ -33,9 +33,9 @@ export async function POST(request: Request, props: RouteParams) {
       );
     }
 
-    const guest = reservation.guest ?? reservation.huesped ?? {};
-    const company = reservation.company ?? reservation.empresa ?? {};
-    const room = reservation.room ?? reservation.habitacion ?? {};
+    const guest = reservation.hostal_guests ?? reservation.guest ?? reservation.huesped ?? {};
+    const company = reservation.hostal_companies ?? reservation.company ?? reservation.empresa ?? {};
+    const room = reservation.hostal_rooms ?? reservation.room ?? reservation.habitacion ?? {};
 
     const guestEmail: string | undefined =
       guest.email || guest.correo || guest.mail;
