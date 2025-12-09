@@ -103,6 +103,33 @@ const formatCurrency = (amount: number) => {
     return "$" + amount.toLocaleString("es-CL");
 };
 
+const getCompanionNames = (companions: any): string[] => {
+    if (!companions || !Array.isArray(companions)) return [];
+
+    return companions
+        .map((c) => {
+            if (typeof c === "string") return c;
+            if (c?.full_name) return String(c.full_name);
+            if (c?.name) return String(c.name);
+            return null;
+        })
+        .filter((x): x is string => !!x)
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+};
+
+const formatPublicReservationCode = (reservation: { id?: number | string | null; code?: string }) => {
+    if (reservation.id != null) {
+        const n = Number(reservation.id);
+        if (!Number.isNaN(n) && n > 0) {
+            const padded = n.toString().padStart(5, "0");
+            return `LB-${padded}`;
+        }
+    }
+    // fallback
+    return reservation.code || `Reserva #${reservation.id}`;
+};
+
 export const ReservationVoucher = ({ reservation }: Props) => {
     const guest = reservation.hostal_guests || {};
     const room = reservation.hostal_rooms || {};
@@ -114,11 +141,15 @@ export const ReservationVoucher = ({ reservation }: Props) => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 0;
 
     // Companions
-    const companions = reservation.companions_json || [];
-    const totalPax = (reservation.adults || 1) + (reservation.children || 0) + companions.length;
+    const companionNames = getCompanionNames(reservation.companions_json);
+    const companionsCount = companionNames.length;
+    const totalPax = (reservation.adults || 1) + (reservation.children || 0) + companionsCount;
 
     // Price Breakdown
     const breakdown = calculateVatBreakdown(reservation.total_price);
+
+    // Public Code
+    const publicCode = formatPublicReservationCode(reservation);
 
     return (
         <Document>
@@ -132,7 +163,7 @@ export const ReservationVoucher = ({ reservation }: Props) => {
                     </View>
                     <View>
                         <Text style={{ fontSize: 12, fontWeight: 'bold' }}>
-                            {reservation.code || `Reserva #${reservation.id}`}
+                            {publicCode}
                         </Text>
                         <Text style={styles.subtitle}>
                             Estado: {reservation.status?.toUpperCase() || "PENDIENTE"}
@@ -184,7 +215,7 @@ export const ReservationVoucher = ({ reservation }: Props) => {
                         <Text style={styles.label}>Ocupación Total:</Text>
                         <Text style={styles.value}>
                             {reservation.adults} Adultos, {reservation.children} Niños
-                            {companions.length > 0 ? ` (+${companions.length} Acompañantes)` : ''}
+                            {companionsCount > 0 ? ` (+${companionsCount} Acompañantes)` : ''}
                         </Text>
                     </View>
                     {reservation.arrival_time && (
@@ -194,6 +225,19 @@ export const ReservationVoucher = ({ reservation }: Props) => {
                         </View>
                     )}
                 </View>
+
+                {/* COMPANIONS LIST */}
+                {companionNames.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Acompañantes</Text>
+                        {companionNames.map((name, idx) => (
+                            <View key={idx} style={styles.row}>
+                                <Text style={{ width: 10 }}>•</Text>
+                                <Text style={styles.value}>{name}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
 
                 {/* PAYMENT INFO */}
                 {(reservation.total_price > 0 || reservation.invoice_status) && (
