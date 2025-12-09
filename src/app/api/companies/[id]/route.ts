@@ -10,7 +10,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // PATCH: Update company
 export async function PATCH(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const body = await req.json();
@@ -37,7 +37,7 @@ export async function PATCH(
 // to map to deactivation as requested in Option A.
 export async function DELETE(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params;

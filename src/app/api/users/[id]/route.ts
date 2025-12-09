@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 // PATCH: Update user details (role, full_name)
+// PATCH: Update user details (role, full_name)
 // ID param is expected to be the supabase_user_id (UUID)
 export async function PATCH(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const body = await req.json();
@@ -35,7 +36,7 @@ export async function PATCH(
 // DELETE: Remove user
 export async function DELETE(
     req: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params;

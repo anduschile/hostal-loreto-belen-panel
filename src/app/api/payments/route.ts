@@ -7,6 +7,8 @@ import {
 } from "@/lib/data/payments";
 import { PaymentSchema, PaymentUpdateSchema } from "@/lib/validators/payments";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);

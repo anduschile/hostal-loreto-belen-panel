@@ -8,6 +8,8 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!; // Or Service Ro
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+export const dynamic = "force-dynamic";
+
 // GET: List companies
 export async function GET() {
     try {

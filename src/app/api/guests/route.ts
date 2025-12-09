@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getGuests, createGuest, updateGuest, deleteGuest } from "@/lib/data/guests";
 import { guestSchema } from "@/lib/validators/guests";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
