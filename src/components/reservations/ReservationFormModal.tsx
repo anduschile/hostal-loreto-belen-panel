@@ -504,7 +504,7 @@ export default function ReservationFormModal({
         setIsSendingEmail(true);
 
         try {
-            const res = await fetch(`/api/reservations/${r.id}/send-confirmation`, { method: "POST" });
+            const res = await fetch(`/api/reservations/${r.id}/send-voucher`, { method: "POST" });
             const data = await res.json();
 
             if (!res.ok || !data.ok) {
