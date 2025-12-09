@@ -175,7 +175,7 @@ export default function CalendarWrapper({
                 roomTypes={roomTypeOptions}
             />
 
-            <div className="flex-1 overflow-auto relative min-h-0">
+            <div className="flex-1 relative min-h-0 overflow-hidden flex flex-col">
                 {viewMode === "month" ? (
                     <CalendarMonthView
                         currentDate={currentDate}
