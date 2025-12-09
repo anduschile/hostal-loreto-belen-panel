@@ -6,6 +6,7 @@ import { getReservationById } from "@/lib/data/reservations";
 import { formatPublicReservationCode } from "@/lib/reservations/formatPublicReservationCode";
 
 export const runtime = "nodejs"; // Necesitamos Buffer, etc.
+export const dynamic = "force-dynamic";
 
 type RouteParams = {
   params: Promise<{ id: string }>;
@@ -198,8 +199,8 @@ export async function POST(request: Request, props: RouteParams) {
       attachments: [
         {
           filename: `Reserva-${publicCode}.pdf`,
-          content: pdfBuffer.toString("base64"),
-          type: "application/pdf",
+          // Usamos Buffer directamente para evitar problemas de tipos con "type" o content strings.
+          content: pdfBuffer,
         },
       ],
     });
