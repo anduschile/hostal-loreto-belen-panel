@@ -92,6 +92,17 @@ const formatDate = (dateStr: string) => {
     }
 };
 
+const calculateVatBreakdown = (amountTotal?: number | null) => {
+    if (!amountTotal || amountTotal <= 0) return null;
+    const net = Math.round(amountTotal / 1.19);
+    const vat = amountTotal - net;
+    return { net, vat, total: amountTotal };
+};
+
+const formatCurrency = (amount: number) => {
+    return "$" + amount.toLocaleString("es-CL");
+};
+
 export const ReservationVoucher = ({ reservation }: Props) => {
     const guest = reservation.hostal_guests || {};
     const room = reservation.hostal_rooms || {};
@@ -105,6 +116,9 @@ export const ReservationVoucher = ({ reservation }: Props) => {
     // Companions
     const companions = reservation.companions_json || [];
     const totalPax = (reservation.adults || 1) + (reservation.children || 0) + companions.length;
+
+    // Price Breakdown
+    const breakdown = calculateVatBreakdown(reservation.total_price);
 
     return (
         <Document>
@@ -200,9 +214,29 @@ export const ReservationVoucher = ({ reservation }: Props) => {
                             </View>
                         )}
 
-                        <Text style={styles.totalPrice}>
-                            Total a Pagar: ${Number(reservation.total_price).toLocaleString('es-CL')} CLP
-                        </Text>
+                        {breakdown ? (
+                            <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 5 }}>
+                                <Text style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>Resumen de montos</Text>
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>Neto:</Text>
+                                    <Text style={styles.value}>{formatCurrency(breakdown.net)}</Text>
+                                </View>
+                                <View style={styles.row}>
+                                    <Text style={styles.label}>IVA (19%):</Text>
+                                    <Text style={styles.value}>{formatCurrency(breakdown.vat)}</Text>
+                                </View>
+                                <View style={[styles.row, { marginTop: 4 }]}>
+                                    <Text style={[styles.label, { fontSize: 12 }]}>Total c/ IVA:</Text>
+                                    <Text style={[styles.value, { fontSize: 12, fontWeight: 'bold' }]}>
+                                        {formatCurrency(breakdown.total)} CLP
+                                    </Text>
+                                </View>
+                            </View>
+                        ) : (
+                            <Text style={styles.totalPrice}>
+                                Total a Pagar: {formatCurrency(reservation.total_price)} CLP
+                            </Text>
+                        )}
                     </View>
                 )}
 
@@ -213,6 +247,16 @@ export const ReservationVoucher = ({ reservation }: Props) => {
                         <Text style={{ fontSize: 9, fontStyle: 'italic' }}>{reservation.notes}</Text>
                     </View>
                 )}
+
+                {/* CONDITIONS - NEW BLOCK */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Condiciones de la estadía</Text>
+                    <View>
+                        <Text style={{ marginBottom: 2 }}>• Habitaciones con baño privado.</Text>
+                        <Text style={{ marginBottom: 2 }}>• Incluye desayuno.</Text>
+                        <Text style={{ marginBottom: 2 }}>• Incluye estacionamiento privado sin costo, sujeto a disponibilidad.</Text>
+                    </View>
+                </View>
 
                 {/* FOOTER POLICIES */}
                 <View style={styles.footer}>
