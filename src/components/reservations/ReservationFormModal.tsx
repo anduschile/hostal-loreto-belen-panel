@@ -83,6 +83,10 @@ export default function ReservationFormModal({
     const [formBillingType, setFormBillingType] = useState("particular");
     const [companies, setCompanies] = useState<any[]>([]);
 
+    // Company Search
+    const [companySearch, setCompanySearch] = useState("");
+    const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+
     const [formCheckIn, setFormCheckIn] = useState("");
     const [formCheckOut, setFormCheckOut] = useState("");
 
@@ -143,6 +147,15 @@ export default function ReservationFormModal({
             .slice(0, 5);
     }, [guests, formGuestSearch]);
 
+    const filteredCompanies = useMemo(() => {
+        let list = companies;
+        if (companySearch) {
+            const lower = companySearch.toLowerCase();
+            list = companies.filter(c => c.name.toLowerCase().includes(lower));
+        }
+        return list.sort((a: any, b: any) => a.name.localeCompare(b.name));
+    }, [companies, companySearch]);
+
     // --- EFFECT: Load Data ---
     useEffect(() => {
         // Fetch companies
@@ -171,6 +184,16 @@ export default function ReservationFormModal({
             setFormGuestSearch(guestName);
 
             setFormCompanyId(r.company_id ? String(r.company_id) : "");
+
+            // Set initial search name
+            if (r.company_id) {
+                // Try to find in companies if loaded, otherwise snapshot
+                const cId = String(r.company_id);
+                const foundC = companies.find(c => String(c.id) === cId);
+                setCompanySearch(foundC ? foundC.name : (r.company_name_snapshot || ""));
+            } else {
+                setCompanySearch("");
+            }
 
             // Set billing type based on explicit field or fall back to company check
             if (r.billing_type) {
@@ -238,6 +261,7 @@ export default function ReservationFormModal({
             setFormGuestId("");
             setFormGuestSearch("");
             setFormCompanyId("");
+            setCompanySearch("");
             setFormStatus("pending");
             setFormTotalPrice("");
             setFormNotes("");
@@ -725,18 +749,70 @@ export default function ReservationFormModal({
                                             <label className="block text-sm font-medium mb-1 text-gray-700">
                                                 Seleccionar Empresa
                                             </label>
-                                            <select
-                                                value={formCompanyId}
-                                                onChange={(e) => setFormCompanyId(e.target.value)}
-                                                className="w-full border p-2.5 rounded-lg border-gray-300 bg-white"
-                                            >
-                                                <option value="">-- Seleccione Empresa --</option>
-                                                {companies.map(c => (
-                                                    <option key={c.id} value={c.id}>
-                                                        {c.name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <div className="relative">
+                                                <div className="relative">
+                                                    <Search className="absolute left-3 top-3 text-gray-400" size={16} />
+                                                    <input
+                                                        type="text"
+                                                        value={companySearch}
+                                                        onChange={(e) => {
+                                                            setCompanySearch(e.target.value);
+                                                            setIsCompanyDropdownOpen(true);
+                                                            if (!e.target.value) setFormCompanyId("");
+                                                        }}
+                                                        onFocus={() => setIsCompanyDropdownOpen(true)}
+                                                        placeholder="Buscar empresa..."
+                                                        className={`w-full border rounded-lg shadow-sm pl-10 p-2.5 ${formCompanyId ? "border-blue-500 bg-blue-50" : "border-gray-300"
+                                                            }`}
+                                                    />
+                                                    {formCompanyId && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormCompanyId("");
+                                                                setCompanySearch("");
+                                                            }}
+                                                            className="absolute right-2 top-2.5 p-1 hover:bg-red-100 rounded-full text-gray-400 hover:text-red-500 transition-colors"
+                                                            title="Quitar empresa"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {isCompanyDropdownOpen && (
+                                                    <>
+                                                        <div
+                                                            className="fixed inset-0 z-10"
+                                                            onClick={() => setIsCompanyDropdownOpen(false)}
+                                                        ></div>
+                                                        <div className="absolute top-full left-0 w-full bg-white border rounded-lg shadow-xl mt-1 z-20 max-h-60 overflow-auto">
+                                                            {filteredCompanies.length > 0 ? (
+                                                                filteredCompanies.map((c: any) => (
+                                                                    <div
+                                                                        key={c.id}
+                                                                        onClick={() => {
+                                                                            setFormCompanyId(String(c.id));
+                                                                            setCompanySearch(c.name);
+                                                                            setIsCompanyDropdownOpen(false);
+                                                                        }}
+                                                                        className="p-3 hover:bg-blue-50 cursor-pointer text-sm border-b last:border-0 flex justify-between items-center"
+                                                                    >
+                                                                        <span className="font-medium">{c.name}</span>
+                                                                        {c.id == formCompanyId && (
+                                                                            <CheckCircle size={14} className="text-blue-600" />
+                                                                        )}
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <div className="p-4 text-center text-gray-500 text-sm">
+                                                                    No se encontraron empresas
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                             {selectedCompanyData && (
                                                 <div className="mt-2 text-xs text-blue-700 bg-blue-50 p-2 rounded border border-blue-100">
                                                     <strong>Convenio:</strong>{' '}
