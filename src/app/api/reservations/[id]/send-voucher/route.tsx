@@ -1,46 +1,27 @@
-// src/app/api/reservations/[id]/send-voucher/route.tsx
-
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-
-// ⬇️ AJUSTA ESTOS IMPORTS SI EN TU PROYECTO TIENEN OTRO NOMBRE/RUTA
-import { resend } from "@/lib/email/resendClient"; // o "@/lib/email/resend" según lo tengas
-import { getReservationWithRelationsById } from "@/lib/data/reservations"; // helper que devuelve reserva + guest + room + company
-import { generateReservationVoucherPdfBuffer } from "@/lib/pdf/generateReservationVoucherPdf"; // helper que genera el PDF como Buffer
+import { resend } from "@/lib/email/resendClient"; // AJUSTA la ruta si en tu proyecto es otra
+import { getReservationById } from "@/lib/data/reservations";
+import { generateReservationVoucherPdfBuffer } from "@/lib/pdf/generateReservationVoucherPdf";
 import { formatPublicReservationCode } from "@/lib/reservations/formatPublicReservationCode";
 
-// Tipos mínimos para que TS no se queje
-type GuestForEmail = {
+type Guest = {
   email?: string | null;
   full_name?: string | null;
 };
 
-type CompanyForEmail = {
+type Company = {
   name?: string | null;
   contact_email?: string | null;
   email?: string | null;
 };
 
-type RoomForEmail = {
+type Room = {
   name?: string | null;
 };
 
-type ReservationEmailPayload = {
-  id: number;
-  code: string;
-  guest_name: string | null;
-  guest_email: string | null;
-  company_name: string | null;
-  check_in: string; // ISO string
-  check_out: string; // ISO string
-  room_name: string | null;
-  total_price: number | null;
-  currency: string | null;
-};
-
-// helper simple para formatear fechas legibles en el correo
-function formatDate(date: string | Date) {
-  const d = typeof date === "string" ? new Date(date) : date;
+function formatDateEs(dateStr: string) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString("es-CL", {
     day: "2-digit",
     month: "long",
@@ -48,8 +29,8 @@ function formatDate(date: string | Date) {
   });
 }
 
-function formatCurrencyCLP(amount: number | null | undefined) {
-  if (!amount || amount <= 0) return null;
+function formatCurrencyClp(amount: number | null | undefined) {
+  if (amount == null || amount <= 0) return null;
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
     currency: "CLP",
@@ -57,29 +38,22 @@ function formatCurrencyCLP(amount: number | null | undefined) {
   }).format(amount);
 }
 
-const paramsSchema = z.object({
-  id: z.string(),
-});
-
 export async function POST(
   _req: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    // 1) Validar params
-    const { id } = paramsSchema.parse(context.params);
-    const numericId = Number(id);
-
-    if (Number.isNaN(numericId) || numericId <= 0) {
+    // 1) ID de la reserva
+    const idNum = Number(params.id);
+    if (!idNum || Number.isNaN(idNum)) {
       return NextResponse.json(
         { ok: false, error: "ID de reserva inválido" },
         { status: 400 }
       );
     }
 
-    // 2) Traer reserva con relaciones (huésped, empresa, habitación, montos, etc.)
-    // ⬇️ AJUSTA ESTE HELPER si en tu proyecto el nombre es distinto
-    const reservation = await getReservationWithRelationsById(numericId);
+    // 2) Traer reserva (usa el mismo helper que el módulo actual)
+    const reservation: any = await getReservationById(idNum);
 
     if (!reservation) {
       return NextResponse.json(
@@ -88,11 +62,10 @@ export async function POST(
       );
     }
 
-    // 3) Extraer datos necesarios para el correo
-    const guest = (reservation.hostal_guests || null) as GuestForEmail | null;
-    const company = (reservation.hostal_companies ||
-      null) as CompanyForEmail | null;
-    const room = (reservation.hostal_rooms || null) as RoomForEmail | null;
+    // 3) Relaciones: huésped / empresa / habitación
+    const guest = (reservation.hostal_guests ?? null) as Guest | null;
+    const company = (reservation.hostal_companies ?? null) as Company | null;
+    const room = (reservation.hostal_rooms ?? null) as Room | null;
 
     const guestEmail: string | null = guest?.email ?? null;
 
@@ -106,38 +79,42 @@ export async function POST(
     const companyEmail: string | null =
       company?.contact_email ?? company?.email ?? null;
 
-    const payload: ReservationEmailPayload = {
+    const publicCode = formatPublicReservationCode({
       id: reservation.id,
       code: reservation.code,
-      guest_name: reservation.guest_name ?? guest?.full_name ?? null,
-      guest_email: guestEmail,
-      company_name: reservation.company_name_snapshot ?? company?.name ?? null,
-      check_in: reservation.check_in,
-      check_out: reservation.check_out,
-      room_name: reservation.room_name ?? room?.name ?? null,
-      total_price: reservation.total_price ?? reservation.amount_total ?? null,
-      currency: reservation.currency ?? "CLP",
-    };
-
-    const publicCode = formatPublicReservationCode({
-      id: payload.id,
-      code: payload.code,
     });
 
-    const totalFormatted = formatCurrencyCLP(payload.total_price);
+    const total =
+      reservation.total_price != null
+        ? Number(reservation.total_price)
+        : reservation.amount_total != null
+          ? Number(reservation.amount_total)
+          : null;
 
-    // 4) Generar el PDF de la reserva como Buffer
-    const pdfBuffer = await generateReservationVoucherPdfBuffer(
-      reservation.id
-    );
+    const totalFormatted = formatCurrencyClp(total);
 
-    // 5) Construir HTML del correo (estilo tarjeta centrada)
-    const html = buildEmailHtml({ payload, publicCode, totalFormatted });
+    // 4) Generar PDF (Buffer) usando el helper que ya tengas
+    const pdfBuffer = await generateReservationVoucherPdfBuffer(reservation.id);
 
-    // 6) Enviar email usando resend
-    // ⬇️ AJUSTA ESTE ENVÍO según cómo esté configurado tu cliente resend
+    // 5) HTML del correo
+    const html = buildEmailHtml({
+      publicCode,
+      guestName: reservation.guest_name || guest?.full_name || "estimado/a",
+      companyName: reservation.company_name_snapshot || company?.name || null,
+      roomName: reservation.room_name || room?.name || null,
+      checkIn: reservation.check_in,
+      checkOut: reservation.check_out,
+      totalFormatted,
+    });
+
+    // 6) Enviar correo con Resend
+    const fromAddress =
+      process.env.RESEND_FROM ||
+      process.env.SMTP_FROM ||
+      "reservas@loretobelen.cl";
+
     const { error } = await resend.emails.send({
-      from: process.env.SMTP_FROM || "reservas@loretobelen.cl",
+      from: fromAddress,
       to: guestEmail,
       cc: companyEmail || undefined,
       subject: `Confirmación de reserva - Hostal Loreto Belén ${publicCode}`,
@@ -155,7 +132,7 @@ export async function POST(
       return NextResponse.json(
         {
           ok: false,
-          error: "No se pudo enviar el correo. Intente nuevamente más tarde.",
+          error: "No se pudo enviar el correo. Intenta nuevamente más tarde.",
         },
         { status: 500 }
       );
@@ -163,38 +140,43 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
-    console.error("Error en send-voucher route:", err);
-    const message =
-      err?.message && typeof err.message === "string"
-        ? err.message
-        : "Error inesperado";
-
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    console.error("Error en /send-voucher:", err);
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          typeof err?.message === "string"
+            ? err.message
+            : "Error inesperado al enviar el correo",
+      },
+      { status: 500 }
+    );
   }
 }
 
-// Helper para construir el HTML del correo
 function buildEmailHtml(args: {
-  payload: ReservationEmailPayload;
   publicCode: string;
+  guestName: string;
+  companyName: string | null;
+  roomName: string | null;
+  checkIn: string;
+  checkOut: string;
   totalFormatted: string | null;
 }) {
-  const { payload, publicCode, totalFormatted } = args;
+  const {
+    publicCode,
+    guestName,
+    companyName,
+    roomName,
+    checkIn,
+    checkOut,
+    totalFormatted,
+  } = args;
 
-  const guestName = payload.guest_name || "estimado/a";
+  const fechas = `${formatDateEs(checkIn)} – ${formatDateEs(checkOut)}`;
 
-  const fechas = `${formatDate(payload.check_in)} – ${formatDate(
-    payload.check_out
-  )}`;
-
-  const empresaLinea = payload.company_name
-    ? `Empresa: ${payload.company_name}<br/>`
-    : "";
-
-  const habitacionLinea = payload.room_name
-    ? `Habitación: ${payload.room_name}<br/>`
-    : "";
-
+  const empresaLinea = companyName ? `Empresa: ${companyName}<br/>` : "";
+  const habitacionLinea = roomName ? `Habitación: ${roomName}<br/>` : "";
   const totalLinea = totalFormatted
     ? `<p style="font-size:14px;line-height:1.6;margin:0 0 16px 0;">
          Total estimado de la reserva: <strong>${totalFormatted}</strong>
@@ -221,7 +203,7 @@ function buildEmailHtml(args: {
                   <strong>Resumen de tu reserva:</strong><br/>
                   Código: <strong>${publicCode}</strong><br/>
                   Fechas: ${fechas}<br/>
-                  Huésped: ${payload.guest_name || "Sin nombre registrado"}<br/>
+                  Huésped: ${guestName}<br/>
                   ${empresaLinea}
                   ${habitacionLinea}
                 </p>
