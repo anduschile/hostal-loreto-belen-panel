@@ -1,245 +1,223 @@
-import { NextRequest, NextResponse } from "next/server";
-import { resend } from "@/lib/email/resendClient"; // AJUSTA la ruta si en tu proyecto es otra
+// src/app/api/reservations/[id]/send-voucher/route.tsx
+
+import { NextResponse } from "next/server";
+import { resend } from "@/lib/email/resendClient";
 import { getReservationById } from "@/lib/data/reservations";
-import { generateReservationVoucherPdfBuffer } from "@/lib/pdf/generateReservationVoucherPdf";
 import { formatPublicReservationCode } from "@/lib/reservations/formatPublicReservationCode";
 
-type Guest = {
-  email?: string | null;
-  full_name?: string | null;
+export const runtime = "nodejs"; // Necesitamos Buffer, etc.
+
+type RouteParams = {
+  params: Promise<{ id: string }>;
 };
 
-type Company = {
-  name?: string | null;
-  contact_email?: string | null;
-  email?: string | null;
-};
-
-type Room = {
-  name?: string | null;
-};
-
-function formatDateEs(dateStr: string) {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString("es-CL", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function formatCurrencyClp(amount: number | null | undefined) {
-  if (amount == null || amount <= 0) return null;
-  return new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-export async function POST(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request, props: RouteParams) {
   try {
-    // 1) ID de la reserva
-    const idNum = Number(params.id);
-    if (!idNum || Number.isNaN(idNum)) {
+    const { id } = await props.params;
+
+    if (!id) {
       return NextResponse.json(
-        { ok: false, error: "ID de reserva inválido" },
+        { error: "Falta el ID de la reserva" },
         { status: 400 }
       );
     }
 
-    // 2) Traer reserva (usa el mismo helper que el módulo actual)
-    const reservation: any = await getReservationById(idNum);
+    // 1) Traer la reserva con todas sus relaciones
+    const reservation: any = await getReservationById(Number(id));
 
     if (!reservation) {
       return NextResponse.json(
-        { ok: false, error: "Reserva no encontrada" },
+        { error: "Reserva no encontrada" },
         { status: 404 }
       );
     }
 
-    // 3) Relaciones: huésped / empresa / habitación
-    const guest = (reservation.hostal_guests ?? null) as Guest | null;
-    const company = (reservation.hostal_companies ?? null) as Company | null;
-    const room = (reservation.hostal_rooms ?? null) as Room | null;
+    const guest = reservation.guest ?? reservation.huesped ?? {};
+    const company = reservation.company ?? reservation.empresa ?? {};
+    const room = reservation.room ?? reservation.habitacion ?? {};
 
-    const guestEmail: string | null = guest?.email ?? null;
+    const guestEmail: string | undefined =
+      guest.email || guest.correo || guest.mail;
 
     if (!guestEmail) {
       return NextResponse.json(
-        { ok: false, error: "El huésped no tiene email registrado" },
+        {
+          error:
+            "La reserva no tiene correo de huésped asociado. No se puede enviar el email.",
+        },
         { status: 400 }
       );
     }
 
-    const companyEmail: string | null =
-      company?.contact_email ?? company?.email ?? null;
+    // Código público LB-xxxxx
+    const publicCode =
+      reservation.public_code ||
+      reservation.publicCode ||
+      formatPublicReservationCode(reservation);
 
-    const publicCode = formatPublicReservationCode({
-      id: reservation.id,
-      code: reservation.code,
-    });
+    // 2) Obtener el PDF desde el endpoint existente /api/reservations/[id]/voucher
+    const requestUrl = new URL(request.url);
+    const origin = requestUrl.origin;
 
-    const total =
-      reservation.total_price != null
-        ? Number(reservation.total_price)
-        : reservation.amount_total != null
-          ? Number(reservation.amount_total)
-          : null;
+    const pdfResponse = await fetch(
+      `${origin}/api/reservations/${id}/voucher`
+    );
 
-    const totalFormatted = formatCurrencyClp(total);
-
-    // 4) Generar PDF (Buffer) usando el helper que ya tengas
-    const pdfBuffer = await generateReservationVoucherPdfBuffer(reservation.id);
-
-    // 5) HTML del correo
-    const html = buildEmailHtml({
-      publicCode,
-      guestName: reservation.guest_name || guest?.full_name || "estimado/a",
-      companyName: reservation.company_name_snapshot || company?.name || null,
-      roomName: reservation.room_name || room?.name || null,
-      checkIn: reservation.check_in,
-      checkOut: reservation.check_out,
-      totalFormatted,
-    });
-
-    // 6) Enviar correo con Resend
-    const fromAddress =
-      process.env.RESEND_FROM ||
-      process.env.SMTP_FROM ||
-      "reservas@loretobelen.cl";
-
-    const { error } = await resend.emails.send({
-      from: fromAddress,
-      to: guestEmail,
-      cc: companyEmail || undefined,
-      subject: `Confirmación de reserva - Hostal Loreto Belén ${publicCode}`,
-      html,
-      attachments: [
-        {
-          filename: `Reserva-${publicCode}.pdf`,
-          content: pdfBuffer,
-        },
-      ],
-    });
-
-    if (error) {
-      console.error("Error enviando correo de reserva:", error);
+    if (!pdfResponse.ok) {
+      console.error(
+        "Error al obtener el PDF desde /api/reservations/[id]/voucher:",
+        pdfResponse.status,
+        await pdfResponse.text().catch(() => "")
+      );
       return NextResponse.json(
-        {
-          ok: false,
-          error: "No se pudo enviar el correo. Intenta nuevamente más tarde.",
-        },
+        { error: "No se pudo generar el PDF de la reserva." },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error("Error en /send-voucher:", err);
+    const pdfArrayBuffer = await pdfResponse.arrayBuffer();
+    const pdfBuffer = Buffer.from(pdfArrayBuffer);
+
+    // 3) Armar el HTML del correo
+    const checkIn =
+      reservation.check_in || reservation.checkIn || reservation.fecha_entrada;
+    const checkOut =
+      reservation.check_out || reservation.checkOut || reservation.fecha_salida;
+    const nights =
+      reservation.nights || reservation.noches || reservation.cant_noches;
+
+    const total =
+      reservation.total ||
+      reservation.total_amount ||
+      reservation.monto_total ||
+      0;
+    const net =
+      reservation.net ||
+      reservation.net_amount ||
+      reservation.monto_neto ||
+      undefined;
+    const tax =
+      reservation.tax ||
+      reservation.vat ||
+      reservation.iva ||
+      undefined;
+
+    const guestName = guest.name || guest.full_name || guest.nombre || "";
+    const companyName = company.name || company.razon_social || "";
+    const roomName = room.name || room.nombre || "";
+
+    const subject = `Voucher de Reserva ${publicCode} - Hostal Loreto Belén`;
+
+    const html = `
+      <div style="background-color:#f3f4f6;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+        <div style="max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:12px;padding:24px;border:1px solid #e5e7eb;">
+          <h1 style="font-size:20px;margin:0 0 8px 0;color:#111827;">Hostal Loreto Belén</h1>
+          <p style="margin:0 0 16px 0;color:#6b7280;font-size:14px;">
+            Confirmación de reserva · Código <strong>${publicCode}</strong>
+          </p>
+
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
+
+          <h2 style="font-size:16px;margin:0 0 8px 0;color:#111827;">Datos de la reserva</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;">
+            <tr>
+              <td style="padding:4px 0;font-weight:600;width:30%;">Huésped</td>
+              <td style="padding:4px 0;">${guestName || "-"}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0;font-weight:600;">Empresa</td>
+              <td style="padding:4px 0;">${companyName || "-"}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0;font-weight:600;">Habitación</td>
+              <td style="padding:4px 0;">${roomName || "-"}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0;font-weight:600;">Check-in</td>
+              <td style="padding:4px 0;">${checkIn || "-"}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0;font-weight:600;">Check-out</td>
+              <td style="padding:4px 0;">${checkOut || "-"}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 0;font-weight:600;">Noches</td>
+              <td style="padding:4px 0;">${nights ?? "-"}</td>
+            </tr>
+          </table>
+
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
+
+          <h2 style="font-size:16px;margin:0 0 8px 0;color:#111827;">Detalle económico</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;">
+            ${net !== undefined
+        ? `<tr>
+                    <td style="padding:4px 0;font-weight:600;width:30%;">Neto</td>
+                    <td style="padding:4px 0;">$${Number(net).toLocaleString("es-CL")}</td>
+                  </tr>`
+        : ""
+      }
+            ${tax !== undefined
+        ? `<tr>
+                    <td style="padding:4px 0;font-weight:600;">IVA</td>
+                    <td style="padding:4px 0;">$${Number(tax).toLocaleString("es-CL")}</td>
+                  </tr>`
+        : ""
+      }
+            <tr>
+              <td style="padding:4px 0;font-weight:600;">Total</td>
+              <td style="padding:4px 0;">$${Number(total).toLocaleString("es-CL")}</td>
+            </tr>
+          </table>
+
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
+
+          <p style="margin:0 0 8px 0;color:#111827;font-weight:600;font-size:14px;">Condiciones generales</p>
+          <ul style="margin:0 0 16px 18px;padding:0;color:#4b5563;font-size:13px;">
+            <li>Baño privado en la habitación.</li>
+            <li>Desayuno incluido según condiciones del hostal.</li>
+            <li>Estacionamiento sujeto a disponibilidad.</li>
+          </ul>
+
+          <p style="margin:0 0 4px 0;color:#6b7280;font-size:12px;">
+            En el PDF adjunto encontrarás el detalle completo de tu reserva.
+          </p>
+          <p style="margin:0;color:#6b7280;font-size:12px;">
+            Si tienes dudas, responde a este correo o contáctanos directamente.
+          </p>
+        </div>
+      </div>
+    `;
+
+    // 4) Enviar correo con Resend
+    const sendResult = await resend.emails.send({
+      from: "Hostal Loreto Belén <no-reply@hostalloretobelen.cl>",
+      to: [guestEmail],
+      subject,
+      html,
+      attachments: [
+        {
+          filename: `Reserva-${publicCode}.pdf`,
+          content: pdfBuffer.toString("base64"),
+          type: "application/pdf",
+        },
+      ],
+    });
+
     return NextResponse.json(
       {
-        ok: false,
-        error:
-          typeof err?.message === "string"
-            ? err.message
-            : "Error inesperado al enviar el correo",
+        ok: true,
+        message: "Correo enviado correctamente",
+        to: guestEmail,
+        resendId: (sendResult as any)?.id ?? null,
       },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Error en POST /api/reservations/[id]/send-voucher:", error);
+    return NextResponse.json(
+      { error: "Error interno al enviar el correo" },
       { status: 500 }
     );
   }
-}
-
-function buildEmailHtml(args: {
-  publicCode: string;
-  guestName: string;
-  companyName: string | null;
-  roomName: string | null;
-  checkIn: string;
-  checkOut: string;
-  totalFormatted: string | null;
-}) {
-  const {
-    publicCode,
-    guestName,
-    companyName,
-    roomName,
-    checkIn,
-    checkOut,
-    totalFormatted,
-  } = args;
-
-  const fechas = `${formatDateEs(checkIn)} – ${formatDateEs(checkOut)}`;
-
-  const empresaLinea = companyName ? `Empresa: ${companyName}<br/>` : "";
-  const habitacionLinea = roomName ? `Habitación: ${roomName}<br/>` : "";
-  const totalLinea = totalFormatted
-    ? `<p style="font-size:14px;line-height:1.6;margin:0 0 16px 0;">
-         Total estimado de la reserva: <strong>${totalFormatted}</strong>
-       </p>`
-    : "";
-
-  return `
-  <body style="margin:0;padding:0;background-color:#f5f5f7;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f5f5f7;padding:24px 0;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="600" cellspacing="0" cellpadding="0"
-                 style="background-color:#ffffff;border-radius:16px;padding:32px;
-                        font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;">
-            <tr>
-              <td>
-                <p style="font-size:16px;margin:0 0 16px 0;">Hola, ${guestName}:</p>
-
-                <p style="font-size:14px;line-height:1.6;margin:0 0 12px 0;">
-                  Gracias por reservar en <strong>Hostal Loreto Belén</strong>. Adjuntamos la ficha en PDF con todos los detalles de tu reserva.
-                </p>
-
-                <p style="font-size:14px;line-height:1.6;margin:0 0 12px 0;">
-                  <strong>Resumen de tu reserva:</strong><br/>
-                  Código: <strong>${publicCode}</strong><br/>
-                  Fechas: ${fechas}<br/>
-                  Huésped: ${guestName}<br/>
-                  ${empresaLinea}
-                  ${habitacionLinea}
-                </p>
-
-                ${totalLinea}
-
-                <p style="font-size:14px;line-height:1.6;margin:0 0 24px 0;">
-                  Condiciones principales:<br/>
-                  • Habitaciones con baño privado.<br/>
-                  • Desayuno incluido.<br/>
-                  • Estacionamiento privado sin costo, sujeto a disponibilidad.
-                </p>
-
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px 0;">
-                  <tr>
-                    <td>
-                      <a href="mailto:reservas@loretobelen.cl"
-                         style="display:inline-block;background-color:#1d4ed8;color:#ffffff;padding:10px 20px;
-                                border-radius:999px;font-size:14px;text-decoration:none;font-weight:600;">
-                        Escribir a reservas
-                      </a>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="font-size:12px;color:#6b7280;margin:0;">
-                  Hostal Loreto Belén<br/>
-                  Yungay 551, Puerto Natales, Chile<br/>
-                  Tel: (61) 2 413285
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-  `;
 }
