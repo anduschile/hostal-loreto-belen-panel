@@ -3,12 +3,9 @@ import React from "react";
 import "./globals.css";
 import { ToasterProvider } from "@/components/ui/ToasterProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { getAppBaseUrl } from "@/lib/config/appUrl";
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-  ? process.env.NEXT_PUBLIC_APP_URL
-  : (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000");
+const baseUrl = getAppBaseUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),

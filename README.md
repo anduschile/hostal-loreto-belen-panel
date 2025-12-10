@@ -34,3 +34,25 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+---
+
+## Configuración de Entorno (Producción)
+
+Para el despliegue en Vercel con el dominio personalizado, asegúrese de configurar las siguientes variables de entorno:
+
+### URL Base de la Aplicación
+Define la URL pública canónica.
+```env
+NEXT_PUBLIC_APP_URL=https://reservaslb.anduschile.com
+```
+
+### Otras variables requeridas
+```env
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+RESEND_API_KEY=...
+```
+
+Nota: Si `NEXT_PUBLIC_APP_URL` no está definido, el sistema intentará usar `VERCEL_URL` o `localhost:3000` como fallback.
