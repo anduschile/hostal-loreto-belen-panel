@@ -30,9 +30,8 @@ export const metadata: Metadata = {
     ],
   },
   icons: {
-    icon: "/icon.svg",
-    // Si tuvieramos apple touch icon:
-    // apple: "/apple-icon.png",
+    icon: "/logo-pagina.png",
+    apple: "/logo-pagina.png",
   },
 };
 

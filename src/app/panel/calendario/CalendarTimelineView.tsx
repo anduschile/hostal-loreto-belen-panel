@@ -35,41 +35,18 @@ export default function CalendarTimelineView({
     const unitWidth = 100 / totalDays;
 
     return (
-        <div className="relative h-full overflow-auto custom-scrollbar">
+        <div className="relative h-full overflow-auto custom-scrollbar bg-white">
+            <div className="min-w-fit flex flex-col pb-4">
 
-            {/* 
-                    CONTENEDOR DEL CALENDARIO (min-w-fit para asegurar scroll horizontal) 
-                    relative para posicionar elementos absolutos dentro
-                */}
-            <div className="min-w-[1000px] flex flex-col pb-4">
-
-                {/* 
-                        HEADER: DÍAS (Sticky Top)
-                        z-40 para estar sobre el contenido.
-                    */}
-                <div className="flex border-b h-[60px] sticky top-0 z-40 bg-white shadow-sm">
-
-                    {/* 
-                            ESQUINA SUPERIOR IZQUIERDA (Sticky Left + Top)
-                            Debe estar por encima de todo (z-50) para no ocultarse al scrollear hacia la derecha o abajo.
-                        */}
-                    <div className="
-                            sticky left-0 top-0 z-50 
-                            min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
-                            bg-white dark:bg-slate-900 
-                            border-r border-gray-200
-                            flex items-center justify-center 
-                            text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-200
-                            shadow-[4px_4px_10px_rgba(0,0,0,0.1)]
-                        ">
+                {/* HEADER ROW */}
+                <div className="sticky top-0 z-40 flex border-b bg-white h-[60px] shadow-sm">
+                    {/* ESQUINA SUPERIOR IZQUIERDA - FIX OVERLAP */}
+                    <div className="sticky left-0 z-50 min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] bg-white border-r border-gray-200 flex items-center justify-center text-xs font-bold uppercase tracking-wider text-gray-700 shadow-[4px_0_10px_rgba(0,0,0,0.05)]">
                         Habitaciones
                     </div>
 
-                    {/* 
-                            FILA DE FECHAS
-                            Se mueve horizontalmente, pero fija verticalmente gracias al sticky del contenedor padre.
-                        */}
-                    <div className="flex flex-1 bg-white">
+                    {/* DÍAS */}
+                    <div className="flex flex-1">
                         {days.map((day) => (
                             <div
                                 key={day.toISOString()}
@@ -86,34 +63,23 @@ export default function CalendarTimelineView({
                     </div>
                 </div>
 
-                {/* BODY: HABITACIONES */}
+                {/* HABITACIONES ROWS */}
                 <div className="flex flex-col">
                     {rooms.map((room) => (
                         <div
                             key={room.id}
-                            className="flex border-b min-h-[70px] relative group hover:bg-gray-50 transition-colors"
+                            className="flex border-b min-h-[70px] relative hover:bg-gray-50 transition-colors"
                         >
-                            {/* 
-                                    COLUMNA IZQUIERDA: DATOS HABITACIÓN (Sticky Left)
-                                    z-30 para estar sobre el contenido (reservas), pero bajo el header (z-40/50).
-                                    bg-white/95 backdrop-blur para efecto moderno.
-                                */}
-                            <div className="
-                                    sticky left-0 z-30 
-                                    min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
-                                    bg-white dark:bg-slate-900 
-                                    border-r border-gray-200 
-                                    p-2 md:p-3 flex flex-col justify-center 
-                                    shadow-[2px_0_10px_rgba(0,0,0,0.05)]
-                                ">
-                                <div className="font-bold text-xs md:text-sm text-gray-800 dark:text-gray-100 leading-tight">
+                            {/* COLUMNA IZQUIERDA STICKY */}
+                            <div className="sticky left-0 z-30 min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] bg-white border-r border-gray-200 p-2 md:p-3 flex flex-col justify-center shadow-[2px_0_10px_rgba(0,0,0,0.02)]">
+                                <div className="font-bold text-xs md:text-sm text-gray-800 leading-tight">
                                     {room.name}
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                     <span className="text-[9px] uppercase font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
                                         {room.type}
                                     </span>
-                                    <span className="text-[10px] text-gray-500 flex items-center gap-1" title="Capacidad">
+                                    <span className="text-[10px] text-gray-500 flex items-center gap-1">
                                         <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 border border-gray-200 text-[9px] font-medium">
                                             {room.capacity ?? "-"}
                                         </span>
@@ -121,35 +87,27 @@ export default function CalendarTimelineView({
                                 </div>
                             </div>
 
-                            {/* GRID DE RESERVAS */}
+                            {/* GRID CELDAS */}
                             <div className="flex flex-1 relative z-0">
-                                {/* Celdas de fondo (click para nueva reserva) */}
                                 {days.map((day) => (
                                     <div
                                         key={day.toISOString()}
                                         className="flex-1 min-w-[80px] border-r border-gray-100 h-full relative cursor-pointer hover:bg-blue-50/50 transition-colors"
                                         onClick={() => onEmptyClick(room, day)}
-                                        title={`Crear reserva en ${room.name} el ${format(
-                                            day,
-                                            "dd/MM"
-                                        )}`}
                                     />
                                 ))}
 
-                                {/* BLOQUES DE RESERVA (Absolute) */}
+                                {/* BLOQUES RESERVAS */}
                                 {reservations
                                     .filter((r) => r.room_id === room.id)
                                     .map((res) => {
                                         const checkIn = parseISO(res.check_in);
                                         const checkOut = parseISO(res.check_out);
 
-                                        // Fuera del rango de la vista
                                         if (checkOut <= viewStart || checkIn > viewEnd) return null;
 
-                                        const effectiveStart =
-                                            checkIn < viewStart ? viewStart : checkIn;
-                                        const effectiveEnd =
-                                            checkOut > viewEnd ? viewEnd : checkOut;
+                                        const effectiveStart = checkIn < viewStart ? viewStart : checkIn;
+                                        const effectiveEnd = checkOut > viewEnd ? viewEnd : checkOut;
 
                                         const startOffset = Math.ceil(
                                             (effectiveStart.getTime() - viewStart.getTime()) /
@@ -191,6 +149,5 @@ export default function CalendarTimelineView({
                 </div>
             </div>
         </div>
-
     );
 }
