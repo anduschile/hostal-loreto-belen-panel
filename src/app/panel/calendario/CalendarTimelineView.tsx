@@ -34,55 +34,44 @@ export default function CalendarTimelineView({
     const totalDays = days.length;
     const unitWidth = 100 / totalDays;
 
-    // Cálculo de estilos para posicionamiento absoluto de reservas
-    // Mantenemos la lógica de porcentajes, asegurándonos de que el contenedor de filas tenga el ancho correcto (min-w-max).
-
     return (
-        <div className="relative h-full overflow-y-auto custom-scrollbar bg-white">
-            <div className="flex w-full">
+        <div className="flex-1 w-full h-full overflow-hidden flex flex-col bg-white">
+            {/* Contenedor principal scrollable */}
+            <div className="flex-1 overflow-auto relative custom-scrollbar">
 
-                {/* === IZQUIERDA: COLUMNA FIJA (Sticky Left) === */}
                 {/* 
-                    Al estar fuera del contenedor overflow-x, esta columna naturalmente se queda a la izquierda.
-                    Usamos 'sticky left-0' por seguridad si el layout padre cambia, pero principalmente es estática en X.
-                    Scrollea verticalmente junto con el Grid Derecho gracias al padre flex.
+                    CONTENEDOR DEL CALENDARIO (min-w-fit para asegurar scroll horizontal) 
+                    relative para posicionar elementos absolutos dentro
                 */}
-                <div className="sticky left-0 z-50 bg-white border-r border-gray-200 shadow-[4px_0_10px_rgba(0,0,0,0.05)] flex-none w-[140px] md:w-[200px]">
+                <div className="min-w-[1000px] flex flex-col relative pb-4">
 
-                    {/* Corner Header (Sticky Top) */}
-                    <div className="sticky top-0 z-50 h-[60px] bg-white border-b border-gray-200 flex items-center justify-center font-bold text-xs uppercase tracking-wider text-gray-700">
-                        Habitaciones
-                    </div>
+                    {/* 
+                        HEADER: DÍAS (Sticky Top)
+                        z-40 para estar sobre el contenido.
+                    */}
+                    <div className="flex border-b h-[60px] sticky top-0 z-40 bg-white shadow-sm">
 
-                    {/* Room Names Rows */}
-                    {rooms.map((room) => (
-                        <div
-                            key={room.id}
-                            className="h-[70px] border-b border-gray-200 p-2 md:p-3 flex flex-col justify-center bg-white group hover:bg-gray-50 transition-colors"
-                        >
-                            <div className="font-bold text-xs md:text-sm text-gray-800 leading-tight truncate">
-                                {room.name}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                <span className="text-[9px] uppercase font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 truncate max-w-full">
-                                    {room.type}
-                                </span>
-                                <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 border border-gray-200 text-[9px] font-medium">
-                                        {room.capacity ?? "-"}
-                                    </span>
-                                </span>
-                            </div>
+                        {/* 
+                            ESQUINA SUPERIOR IZQUIERDA (Sticky Left + Top)
+                            Debe estar por encima de todo (z-50) para no ocultarse al scrollear hacia la derecha o abajo.
+                        */}
+                        <div className="
+                            sticky left-0 top-0 z-50 
+                            min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
+                            bg-slate-900 text-white
+                            border-r border-slate-700
+                            flex items-center justify-center 
+                            text-xs font-bold uppercase tracking-wider
+                            shadow-[4px_4px_10px_rgba(0,0,0,0.1)]
+                        ">
+                            Habitaciones
                         </div>
-                    ))}
-                </div>
 
-                {/* === DERECHA: GRID SCROLLEABLE (Overflow X) === */}
-                <div className="flex-1 min-w-0 overflow-x-auto">
-                    <div className="min-w-max">
-
-                        {/* Date Header Row (Sticky Top) */}
-                        <div className="sticky top-0 z-40 bg-white border-b border-gray-200 h-[60px] flex">
+                        {/* 
+                            FILA DE FECHAS
+                            Se mueve horizontalmente, pero fija verticalmente gracias al sticky del contenedor padre.
+                        */}
+                        <div className="flex flex-1 bg-white">
                             {days.map((day) => (
                                 <div
                                     key={day.toISOString()}
@@ -97,73 +86,112 @@ export default function CalendarTimelineView({
                                 </div>
                             ))}
                         </div>
+                    </div>
 
-                        {/* Rooms Grid Rows */}
+                    {/* BODY: HABITACIONES */}
+                    <div className="flex flex-col">
                         {rooms.map((room) => (
                             <div
                                 key={room.id}
-                                className="h-[70px] border-b border-gray-100 flex relative group hover:bg-gray-50 transition-colors"
+                                className="flex border-b min-h-[70px] relative group hover:bg-gray-50 transition-colors"
                             >
-                                {/* Celdas de Días */}
-                                {days.map((day) => (
-                                    <div
-                                        key={day.toISOString()}
-                                        className="flex-1 min-w-[80px] border-r border-gray-100 h-full relative cursor-pointer hover:bg-blue-50/50 transition-colors"
-                                        onClick={() => onEmptyClick(room, day)}
-                                    />
-                                ))}
+                                {/* 
+                                    COLUMNA IZQUIERDA: DATOS HABITACIÓN (Sticky Left)
+                                    z-30 para estar sobre el contenido (reservas), pero bajo el header (z-40/50).
+                                    bg-white/95 backdrop-blur para efecto moderno.
+                                */}
+                                <div className="
+                                    sticky left-0 z-30 
+                                    min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
+                                    bg-slate-50/95 backdrop-blur-sm
+                                    border-r border-gray-200 
+                                    p-3 flex flex-col justify-center 
+                                    shadow-[2px_0_10px_rgba(0,0,0,0.05)]
+                                ">
+                                    <div className="font-bold text-sm text-gray-800 leading-tight">
+                                        {room.name}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                        <span className="text-[9px] uppercase font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                                            {room.type}
+                                        </span>
+                                        <span className="text-[10px] text-gray-500 flex items-center gap-1" title="Capacidad">
+                                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 border border-gray-200 text-[9px] font-medium">
+                                                {room.capacity ?? "-"}
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
 
-                                {/* Bloques de Reservas (Absolute) */}
-                                {reservations
-                                    .filter((r) => r.room_id === room.id)
-                                    .map((res) => {
-                                        const checkIn = parseISO(res.check_in);
-                                        const checkOut = parseISO(res.check_out);
+                                {/* GRID DE RESERVAS */}
+                                <div className="flex flex-1 relative">
+                                    {/* Celdas de fondo (click para nueva reserva) */}
+                                    {days.map((day) => (
+                                        <div
+                                            key={day.toISOString()}
+                                            className="flex-1 min-w-[80px] border-r border-gray-100 h-full relative cursor-pointer hover:bg-blue-50/50 transition-colors"
+                                            onClick={() => onEmptyClick(room, day)}
+                                            title={`Crear reserva en ${room.name} el ${format(
+                                                day,
+                                                "dd/MM"
+                                            )}`}
+                                        />
+                                    ))}
 
-                                        if (checkOut <= viewStart || checkIn > viewEnd) return null;
+                                    {/* BLOQUES DE RESERVA (Absolute) */}
+                                    {reservations
+                                        .filter((r) => r.room_id === room.id)
+                                        .map((res) => {
+                                            const checkIn = parseISO(res.check_in);
+                                            const checkOut = parseISO(res.check_out);
 
-                                        const effectiveStart = checkIn < viewStart ? viewStart : checkIn;
-                                        const effectiveEnd = checkOut > viewEnd ? viewEnd : checkOut;
+                                            // Fuera del rango de la vista
+                                            if (checkOut <= viewStart || checkIn > viewEnd) return null;
 
-                                        const startOffset = Math.ceil(
-                                            (effectiveStart.getTime() - viewStart.getTime()) /
-                                            (1000 * 60 * 60 * 24)
-                                        );
-                                        const duration = Math.ceil(
-                                            (effectiveEnd.getTime() - effectiveStart.getTime()) /
-                                            (1000 * 60 * 60 * 24)
-                                        );
+                                            const effectiveStart =
+                                                checkIn < viewStart ? viewStart : checkIn;
+                                            const effectiveEnd =
+                                                checkOut > viewEnd ? viewEnd : checkOut;
 
-                                        const left = startOffset * unitWidth;
-                                        const width = duration * unitWidth;
+                                            const startOffset = Math.ceil(
+                                                (effectiveStart.getTime() - viewStart.getTime()) /
+                                                (1000 * 60 * 60 * 24)
+                                            );
+                                            const duration = Math.ceil(
+                                                (effectiveEnd.getTime() - effectiveStart.getTime()) /
+                                                (1000 * 60 * 60 * 24)
+                                            );
 
-                                        return (
-                                            <div
-                                                key={res.id}
-                                                style={{
-                                                    position: "absolute",
-                                                    left: `${left}%`,
-                                                    width: `${width}%`,
-                                                    top: "6px",
-                                                    bottom: "6px",
-                                                    zIndex: 10,
-                                                    paddingLeft: "2px",
-                                                    paddingRight: "2px"
-                                                }}
-                                            >
-                                                <ReservationBlock
-                                                    reservation={res}
-                                                    onClick={() => onReservationClick(res)}
-                                                    viewMode={viewMode}
-                                                />
-                                            </div>
-                                        );
-                                    })}
+                                            const left = startOffset * unitWidth;
+                                            const width = duration * unitWidth;
+
+                                            return (
+                                                <div
+                                                    key={res.id}
+                                                    style={{
+                                                        position: "absolute",
+                                                        left: `${left}%`,
+                                                        width: `${width}%`,
+                                                        top: "6px",
+                                                        bottom: "6px",
+                                                        zIndex: 10,
+                                                        paddingLeft: "2px",
+                                                        paddingRight: "2px"
+                                                    }}
+                                                >
+                                                    <ReservationBlock
+                                                        reservation={res}
+                                                        onClick={() => onReservationClick(res)}
+                                                        viewMode={viewMode}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                </div>
                             </div>
                         ))}
                     </div>
                 </div>
-
             </div>
         </div>
     );
