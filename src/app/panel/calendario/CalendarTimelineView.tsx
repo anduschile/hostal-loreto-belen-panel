@@ -40,10 +40,11 @@ export default function CalendarTimelineView({
             <div className="flex-1 overflow-auto relative custom-scrollbar">
 
                 {/* 
-                    CONTENEDOR DEL CALENDARIO (min-w-fit para asegurar scroll horizontal) 
-                    relative para posicionar elementos absolutos dentro
+                    CONTENEDOR DEL CALENDARIO
+                    Usamos w-max para forzar que el ancho sea el del contenido (headers + celdas),
+                    activando el scroll horizontal en el padre.
                 */}
-                <div className="min-w-[1000px] flex flex-col relative pb-4">
+                <div className="w-max min-w-full flex flex-col relative pb-4 bg-white">
 
                     {/* 
                         HEADER: DÍAS (Sticky Top)
@@ -53,7 +54,7 @@ export default function CalendarTimelineView({
 
                         {/* 
                             ESQUINA SUPERIOR IZQUIERDA (Sticky Left + Top)
-                            Debe estar por encima de todo (z-50) para no ocultarse al scrollear hacia la derecha o abajo.
+                            Debe estar por encima de todo (z-50).
                         */}
                         <div className="
                             sticky left-0 top-0 z-50 
@@ -69,7 +70,7 @@ export default function CalendarTimelineView({
 
                         {/* 
                             FILA DE FECHAS
-                            Se mueve horizontalmente, pero fija verticalmente gracias al sticky del contenedor padre.
+                            Se mueve horizontalmente.
                         */}
                         <div className="flex flex-1 bg-white">
                             {days.map((day) => (
@@ -97,8 +98,7 @@ export default function CalendarTimelineView({
                             >
                                 {/* 
                                     COLUMNA IZQUIERDA: DATOS HABITACIÓN (Sticky Left)
-                                    z-30 para estar sobre el contenido (reservas), pero bajo el header (z-40/50).
-                                    bg-white/95 backdrop-blur para efecto moderno.
+                                    z-30 para estar sobre el contenido.
                                 */}
                                 <div className="
                                     sticky left-0 z-30 
@@ -125,7 +125,7 @@ export default function CalendarTimelineView({
 
                                 {/* GRID DE RESERVAS */}
                                 <div className="flex flex-1 relative">
-                                    {/* Celdas de fondo (click para nueva reserva) */}
+                                    {/* Celdas de fondo */}
                                     {days.map((day) => (
                                         <div
                                             key={day.toISOString()}
@@ -138,14 +138,13 @@ export default function CalendarTimelineView({
                                         />
                                     ))}
 
-                                    {/* BLOQUES DE RESERVA (Absolute) */}
+                                    {/* BLOQUES DE RESERVA */}
                                     {reservations
                                         .filter((r) => r.room_id === room.id)
                                         .map((res) => {
                                             const checkIn = parseISO(res.check_in);
                                             const checkOut = parseISO(res.check_out);
 
-                                            // Fuera del rango de la vista
                                             if (checkOut <= viewStart || checkIn > viewEnd) return null;
 
                                             const effectiveStart =
