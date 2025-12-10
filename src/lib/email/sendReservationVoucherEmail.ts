@@ -2,30 +2,30 @@
 import { resend } from "./resendClient";
 
 type SendVoucherParams = {
-    toEmail: string;
-    guestName?: string;
-    publicCode: string;
-    pdfBuffer: Buffer;
+  toEmail: string;
+  guestName?: string;
+  publicCode: string;
+  pdfBuffer: Buffer;
 };
 
 export async function sendReservationVoucherEmail({
-    toEmail,
-    guestName,
-    publicCode,
-    pdfBuffer,
+  toEmail,
+  guestName,
+  publicCode,
+  pdfBuffer,
 }: SendVoucherParams) {
-    if (!process.env.RESEND_API_KEY) {
-        throw new Error(
-            "RESEND_API_KEY no está definida. Por favor agréguela a las variables de entorno."
-        );
-    }
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error(
+      "RESEND_API_KEY no está definida. Por favor agréguela a las variables de entorno."
+    );
+  }
 
-    const { data, error } = await resend.emails.send({
-        from: "Hostal Loreto Belén <noreply@resend.dev>",
-        replyTo: "reservas@loretobelen.cl",
-        to: [toEmail],
-        subject: `Voucher de Reserva - Hostal Loreto Belén (${publicCode})`,
-        html: `
+  const { data, error } = await resend.emails.send({
+    from: "Hostal Loreto Belén <reservas@loretobelen.cl>",
+    replyTo: "reservas@loretobelen.cl",
+    to: [toEmail],
+    subject: `Voucher de Reserva - Hostal Loreto Belén (${publicCode})`,
+    html: `
 <!DOCTYPE html>
 <html lang="es">
   <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
@@ -116,18 +116,18 @@ export async function sendReservationVoucherEmail({
   </body>
 </html>
 `,
-        attachments: [
-            {
-                filename: `voucher_${publicCode}.pdf`,
-                content: pdfBuffer,
-            },
-        ],
-    });
+    attachments: [
+      {
+        filename: `voucher_${publicCode}.pdf`,
+        content: pdfBuffer,
+      },
+    ],
+  });
 
-    if (error) {
-        console.error("Error enviando email con Resend:", error);
-        throw new Error(`Error enviando email: ${error.message}`);
-    }
+  if (error) {
+    console.error("Error enviando email con Resend:", error);
+    throw new Error(`Error enviando email: ${error.message}`);
+  }
 
-    return data;
+  return data;
 }
