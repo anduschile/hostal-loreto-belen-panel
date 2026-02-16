@@ -3,9 +3,9 @@
 import { useMemo } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarRoom, CalendarReservation } from "@/lib/data/calendar";
+import { CalendarRoom, CalendarReservation, EXTERNAL_ROOM_ID } from "@/lib/data/calendar";
 import ReservationBlock from "./ReservationBlock";
-
+import CalendarExternalCell from "./CalendarExternalCell";
 type Props = {
     currentDate: Date;
     rooms: CalendarRoom[];
@@ -63,11 +63,13 @@ export default function CalendarMonthView({ currentDate, rooms, reservations, on
 
                     {/* Body: Rooms */}
                     <div className="flex flex-col min-w-max">
-                        {rooms.map(room => (
-                            <div key={room.id} className="flex border-b min-h-[70px] relative group hover:bg-gray-50 transition-colors">
+                        {rooms.map(room => {
+                            const isExternal = room.id === EXTERNAL_ROOM_ID;
+                            return (
+                                <div key={room.id} className={`flex border-b ${isExternal ? 'min-h-[120px]' : 'min-h-[70px]'} relative group hover:bg-gray-50 transition-colors`}>
 
-                                {/* Room Label (Sticky Left) */}
-                                <div className="
+                                    {/* Room Label (Sticky Left) */}
+                                    <div className="
                                     sticky left-0 z-30 
                                     min-w-[140px] w-[140px] md:min-w-[200px] md:w-[200px] 
                                     bg-white dark:bg-slate-900 
@@ -75,78 +77,104 @@ export default function CalendarMonthView({ currentDate, rooms, reservations, on
                                     p-2 md:p-3 flex flex-col justify-center 
                                     shadow-[2px_0_10px_rgba(0,0,0,0.05)]
                                 ">
-                                    <div className="font-bold text-xs md:text-sm text-gray-800 dark:text-gray-100 leading-tight">
-                                        {room.name}
+                                        <div className="font-bold text-xs md:text-sm text-gray-800 dark:text-gray-100 leading-tight">
+                                            {room.name}
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border ${isExternal ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                {room.type}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2 mt-1.5">
-                                        <span className="text-[9px] uppercase font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                                            {room.type}
-                                        </span>
-                                    </div>
-                                </div>
 
-                                {/* Grid Cells */}
-                                <div className="flex flex-1 relative z-0">
-                                    {/* Background Cells (Clickable) */}
-                                    {daysInMonth.map(day => (
-                                        <div
-                                            key={day.toISOString()}
-                                            className="flex-1 min-w-[40px] border-r border-gray-100 h-full relative hover:bg-black/5 cursor-pointer"
-                                            onClick={() => onEmptyClick(day, room.id)}
-                                            title={`Crear reserva en ${room.name} el ${format(day, "dd/MM")}`}
-                                        />
-                                    ))}
+                                    {/* Grid Cells */}
+                                    <div className="flex flex-1 relative z-0">
+                                        {/* Background Cells (Clickable) */}
+                                        {daysInMonth.map(day => {
+                                            if (isExternal) {
+                                                // EXTERNAL: Cell-based rendering
+                                                const dayReservations = reservations.filter(r =>
+                                                    r.room_id === room.id &&
+                                                    r.check_in <= format(day, 'yyyy-MM-dd') &&
+                                                    r.check_out > format(day, 'yyyy-MM-dd')
+                                                );
 
-                                    {/* Reservations Overlay */}
-                                    {reservations
-                                        .filter(r => r.room_id === room.id)
-                                        .map(res => {
-                                            // Calculate position
-                                            const checkIn = parseISO(res.check_in);
-                                            const checkOut = parseISO(res.check_out);
-                                            const viewStart = startOfDay(daysInMonth[0]);
-                                            const viewEnd = endOfDay(daysInMonth[daysInMonth.length - 1]);
-
-                                            if (checkOut <= viewStart || checkIn > viewEnd) return null;
-
-                                            const effectiveStart = checkIn < viewStart ? viewStart : checkIn;
-                                            const effectiveEnd = checkOut > viewEnd ? viewEnd : checkOut;
-
-                                            const totalDays = daysInMonth.length;
-                                            const unitWidth = 100 / totalDays;
-
-                                            const startOffset = Math.ceil((effectiveStart.getTime() - viewStart.getTime()) / (1000 * 60 * 60 * 24));
-                                            const duration = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24));
-
-                                            const left = startOffset * unitWidth;
-                                            const width = duration * unitWidth;
+                                                return (
+                                                    <div
+                                                        key={day.toISOString()}
+                                                        className="flex-1 min-w-[40px] border-r border-gray-100 h-full relative p-0.5"
+                                                    >
+                                                        <CalendarExternalCell
+                                                            date={day}
+                                                            reservations={dayReservations}
+                                                            onReservationClick={onReservationClick}
+                                                            viewMode="month"
+                                                        />
+                                                    </div>
+                                                );
+                                            }
 
                                             return (
                                                 <div
-                                                    key={res.id}
-                                                    style={{
-                                                        position: 'absolute',
-                                                        left: `${left}%`,
-                                                        width: `${width}%`,
-                                                        top: '4px',
-                                                        bottom: '4px',
-                                                        zIndex: 10,
-                                                        paddingLeft: '1px',
-                                                        paddingRight: '1px'
-                                                    }}
-                                                >
-                                                    <ReservationBlock
-                                                        reservation={res}
-                                                        onClick={() => onReservationClick(res)}
-                                                        viewMode="month"
-                                                    />
-                                                </div>
+                                                    key={day.toISOString()}
+                                                    className="flex-1 min-w-[40px] border-r border-gray-100 h-full relative hover:bg-black/5 cursor-pointer"
+                                                    onClick={() => onEmptyClick(day, room.id)}
+                                                    title={`Crear reserva en ${room.name} el ${format(day, "dd/MM")}`}
+                                                />
                                             )
-                                        })
-                                    }
+                                        })}
+
+                                        {/* Reservations Overlay (Only Internal) */}
+                                        {!isExternal && reservations
+                                            .filter(r => r.room_id === room.id)
+                                            .map(res => {
+                                                // Calculate position
+                                                const checkIn = parseISO(res.check_in);
+                                                const checkOut = parseISO(res.check_out);
+                                                const viewStart = startOfDay(daysInMonth[0]);
+                                                const viewEnd = endOfDay(daysInMonth[daysInMonth.length - 1]);
+
+                                                if (checkOut <= viewStart || checkIn > viewEnd) return null;
+
+                                                const effectiveStart = checkIn < viewStart ? viewStart : checkIn;
+                                                const effectiveEnd = checkOut > viewEnd ? viewEnd : checkOut;
+
+                                                const totalDays = daysInMonth.length;
+                                                const unitWidth = 100 / totalDays;
+
+                                                const startOffset = Math.ceil((effectiveStart.getTime() - viewStart.getTime()) / (1000 * 60 * 60 * 24));
+                                                const duration = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24));
+
+                                                const left = startOffset * unitWidth;
+                                                const width = duration * unitWidth;
+
+                                                return (
+                                                    <div
+                                                        key={res.id}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            left: `${left}%`,
+                                                            width: `${width}%`,
+                                                            top: '4px',
+                                                            bottom: '4px',
+                                                            zIndex: 10,
+                                                            paddingLeft: '1px',
+                                                            paddingRight: '1px'
+                                                        }}
+                                                    >
+                                                        <ReservationBlock
+                                                            reservation={res}
+                                                            onClick={() => onReservationClick(res)}
+                                                            viewMode="month"
+                                                        />
+                                                    </div>
+                                                )
+                                            })
+                                        }
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </div>
             </div>

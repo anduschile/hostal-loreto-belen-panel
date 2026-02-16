@@ -57,7 +57,7 @@ export default function ReservationBlock({ reservation, style, onClick, viewMode
     return (
         <div
             ref={blockRef}
-            className={`absolute top-1 bottom-1 rounded-r-md shadow-sm text-xs font-medium cursor-pointer transition-all duration-200 px-2 flex flex-col justify-center gap-0.5 z-10 overflow-hidden ${baseClasses} ${hover ? "z-30 shadow-lg -translate-y-0.5" : ""}`}
+            className={`${style?.position === 'relative' ? 'relative w-full mb-1 min-h-[24px]' : 'absolute top-1 bottom-1'} rounded-r-md shadow-sm text-xs font-medium cursor-pointer transition-all duration-200 px-2 flex flex-col justify-center gap-0.5 z-10 overflow-hidden ${baseClasses} ${hover ? "z-30 shadow-lg -translate-y-0.5" : ""}`}
             style={style || { position: 'relative', width: '100%', height: '100%' }}
             onClick={(e) => {
                 e.stopPropagation();
