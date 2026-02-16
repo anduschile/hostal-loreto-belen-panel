@@ -1,0 +1,323 @@
+
+> hostal-app@0.1.0 lint
+> eslint
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\calendar\route.ts
+  30:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\companies\[id]\route.ts
+  30:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  54:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\companies\route.ts
+  17:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\daybook\route.ts
+  30:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  55:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  62:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\guests\route.ts
+  14:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  25:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\guests\search\route.ts
+  30:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\housekeeping\route.ts
+  21:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  69:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  72:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\payments\route.ts
+   24:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:63  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   59:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   89:68  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   96:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  118:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\reservations\[id]\invoice\route.ts
+  47:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\reservations\[id]\send-confirmation\route.tsx
+  16:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  71:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\reservations\[id]\send-voucher\route.tsx
+  28:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  77:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\reservations\[id]\status\route.tsx
+  63:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\reservations\[id]\voucher\route.ts
+  39:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  42:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\reservations\route.ts
+  37:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  54:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  71:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  94:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\rooms\route.ts
+  23:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  84:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\rooms\status\route.ts
+  19:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\stats\dashboard\route.ts
+  33:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\users\[id]\route.ts
+  31:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  57:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\api\users\route.ts
+   4:10  warning  'createClient' is defined but never used  @typescript-eslint/no-unused-vars
+  19:21  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  60:21  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\login\page.tsx
+  46:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\calendario\CalendarMonthView.tsx
+  4:63  warning  'isSameDay' is defined but never used         @typescript-eslint/no-unused-vars
+  4:74  warning  'isWithinInterval' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\calendario\CalendarSidebar.tsx
+   4:10  warning  'User' is defined but never used              @typescript-eslint/no-unused-vars
+   4:16  warning  'BedDouble' is defined but never used         @typescript-eslint/no-unused-vars
+   4:27  warning  'Users' is defined but never used             @typescript-eslint/no-unused-vars
+  19:7   warning  'IconBed' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\calendario\CalendarWrapper.tsx
+   68:34  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  127:8   warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  132:24  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\calendario\ReservationBlock.tsx
+  31:31  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\calendario\page.tsx
+  16:44  warning  'props' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\dashboard\DashboardClient.tsx
+  54:18  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\empresas\page.tsx
+    7:23   warning  'Search' is defined but never used        @typescript-eslint/no-unused-vars
+   66:18   warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  108:18   warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  142:25   error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  314:120  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\habitaciones\RoomCard.tsx
+  17:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\habitaciones\RoomsClient.tsx
+   55:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   63:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  110:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  117:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\habitaciones\RoomsGrid.tsx
+   38:70  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   74:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  124:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\housekeeping\HkClient.tsx
+   41:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   91:57  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\huespedes\HuespedesClient.tsx
+    6:10  warning  'User' is defined but never used          @typescript-eslint/no-unused-vars
+   76:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  126:17  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\libro-dia\DaybookClient.tsx
+   52:21  error    Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+   86:18  warning  'e' is defined but never used                                    @typescript-eslint/no-unused-vars
+   86:21  error    Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+  120:18  warning  'e' is defined but never used                                    @typescript-eslint/no-unused-vars
+  238:29  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  238:39  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\page.tsx
+  6:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\pagos\PagosClient.tsx
+   32:44  error    Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+   42:10  warning  'isDeleting' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  103:21  error    Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+  163:21  error    Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\pagos\page.tsx
+  23:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\registro-huespedes\GuestsLogClient.tsx
+   4:18  warning  'parseISO' is defined but never used          @typescript-eslint/no-unused-vars
+   4:28  warning  'isWithinInterval' is defined but never used  @typescript-eslint/no-unused-vars
+   5:10  warning  'es' is defined but never used                @typescript-eslint/no-unused-vars
+   6:28  warning  'Calendar' is defined but never used          @typescript-eslint/no-unused-vars
+   6:38  warning  'User' is defined but never used              @typescript-eslint/no-unused-vars
+   6:44  warning  'FileText' is defined but never used          @typescript-eslint/no-unused-vars
+  60:32  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  84:56  error    Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\reportes\ReportsClient.tsx
+  27:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\reportes\ReportsClient.tsx:27:9
+  25 |
+  26 |     useEffect(() => {
+> 27 |         setLoading(false);
+     |         ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  28 |     }, [initialData]);
+  29 |
+  30 |     const handleApply = () => {  react-hooks/set-state-in-effect
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\reservas\ReservasClient.tsx
+   37:12   warning  'fromDate' is assigned a value but never used   @typescript-eslint/no-unused-vars
+   38:12   warning  'toDate' is assigned a value but never used     @typescript-eslint/no-unused-vars
+   39:12   warning  'roomId' is assigned a value but never used     @typescript-eslint/no-unused-vars
+   40:12   warning  'guestName' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   41:12   warning  'status' is assigned a value but never used     @typescript-eslint/no-unused-vars
+   78:25   error    Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+   95:20   error    Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+  134:98   error    Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+  135:105  error    Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\reservas\ReservasList.tsx
+   62:66  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  101:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\usuarios\UsuariosClient.tsx
+   17:11  warning  'router' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   77:18  warning  'e' is defined but never used                @typescript-eslint/no-unused-vars
+  114:18  warning  'e' is defined but never used                @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\app\panel\usuarios\page.tsx
+    7:34  warning  'Save' is defined but never used          @typescript-eslint/no-unused-vars
+   58:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   93:21  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  132:21  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\components\CalendarGrid.tsx
+  147:25  warning  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\components\NewReservationForm.tsx
+  15:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\components\ReservationDetail.tsx
+  12:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  14:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\components\habitaciones\RoomFormModal.tsx
+  49:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\components\habitaciones\RoomFormModal.tsx:49:13
+  47 |     useEffect(() => {
+  48 |         if (room && open) {
+> 49 |             setName(room.name || "");
+     |             ^^^^^^^ Avoid calling setState() directly within an effect
+  50 |             setCode(room.code || "");
+  51 |             setRoomType(
+  52 |                 (room.room_type || "").toUpperCase() || "MATRIMONIAL"  react-hooks/set-state-in-effect
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\components\layout\Sidebar.tsx
+  39:34  warning  'loading' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\components\reservations\ReservationFormModal.tsx
+    85:48  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   160:30  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   160:38  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   180:22  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   292:8   warning  React Hook useEffect has a missing dependency: 'companies'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   419:21  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   430:96  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   442:24  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   468:21  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   522:25  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   598:25  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   614:21  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   633:21  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   642:18  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   650:18  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   675:25  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+   968:91  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+  1298:76  error    Unexpected any. Specify a different type                                                                      @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\lib\audit.ts
+  7:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  8:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\lib\data\calendar.ts
+   31:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  113:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:73  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\lib\data\daybook.ts
+   26:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   74:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:29  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\lib\data\payments.ts
+   66:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  150:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\lib\data\reservations.ts
+   32:21  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+   42:25  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+  218:50  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+  220:7   error  'dbPayload' is never reassigned. Use 'const' instead  prefer-const
+  241:62  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\lib\pdf\ReservationVoucher.tsx
+    2:50  warning  'Font' is defined but never used               @typescript-eslint/no-unused-vars
+   82:18  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   90:14  warning  'e' is defined but never used                  @typescript-eslint/no-unused-vars
+  106:40  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  146:11  warning  'totalPax' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\lib\pdf\generateReservationVoucherPdf.ts
+  6:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  9:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\lib\utils\reservations.ts
+  18:14  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\middleware.ts
+  11:28  warning  'req' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\2026\Paginas Webs 2026\Loreto Belen\App-Hostal\hostal-app\src\types\hostal.ts
+  128:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Ô£û 168 problems (125 errors, 43 warnings)
+  1 error and 0 warnings potentially fixable with the `--fix` option.
+

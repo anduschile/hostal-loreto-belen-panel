@@ -13,7 +13,7 @@ export type ReservationFilters = {
 // ---------- HELPERS ----------
 
 type ReservationDbPayload = {
-  room_id?: number;
+  room_id?: number | null;
   guest_id?: number | null;
   company_id?: number | null;
   check_in?: string;
@@ -37,6 +37,13 @@ type ReservationDbPayload = {
   discount_type_snapshot?: string | null;
   discount_value_snapshot?: number | null;
   credit_days_snapshot?: number | null;
+  // External Referral
+  fulfillment_type?: string;
+  external_lodging_name?: string | null;
+  external_sale_total?: number | null;
+  external_supplier_cost_total?: number | null;
+  external_supplier_payment_status?: string;
+  external_notes?: string | null;
 };
 
 function mapToDb(input: any): ReservationDbPayload {
@@ -69,6 +76,13 @@ function mapToDb(input: any): ReservationDbPayload {
     discount_type_snapshot: input.discount_type_snapshot ?? null,
     discount_value_snapshot: input.discount_value_snapshot ?? null,
     credit_days_snapshot: input.credit_days_snapshot ?? null,
+    // External Referral
+    fulfillment_type: input.fulfillment_type ?? 'INTERNAL',
+    external_lodging_name: input.external_lodging_name ?? null,
+    external_sale_total: input.external_sale_total ?? null,
+    external_supplier_cost_total: input.external_supplier_cost_total ?? null,
+    external_supplier_payment_status: input.external_supplier_payment_status ?? 'PENDING',
+    external_notes: input.external_notes ?? null,
   };
 
   // Solo tocamos code si viene en el payload

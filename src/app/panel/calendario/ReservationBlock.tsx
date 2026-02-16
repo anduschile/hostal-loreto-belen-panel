@@ -109,6 +109,19 @@ export default function ReservationBlock({ reservation, style, onClick, viewMode
                             || (reservation.company_id ? "Empresa" : "Particular")}
                     </div>
 
+                    {/* Companion Indicator */}
+                    {(() => {
+                        const count = Array.isArray(reservation.companions_json) ? reservation.companions_json.length : 0;
+                        if (count > 0) {
+                            return (
+                                <div className="text-[8px] md:text-[9px] text-blue-600 font-bold flex items-center gap-0.5 mt-0.5">
+                                    <User size={8} /> +{count}
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
+
                     {/* Price - hidden on very small blocks/mobile if needed, or kept absolute */}
                     {(style?.width && parseInt(String(style.width)) > 50) && (
                         <div className="absolute bottom-0.5 right-1 text-[8px] font-bold opacity-60 hidden sm:block">
@@ -184,6 +197,29 @@ export default function ReservationBlock({ reservation, style, onClick, viewMode
                                 <p className="line-clamp-3 leading-relaxed">{reservation.notes}</p>
                             </div>
                         )}
+
+                        {/* --- NEW: COMPANIONS --- */}
+                        {(() => {
+                            const companions = Array.isArray(reservation.companions_json) ? reservation.companions_json : [];
+                            if (companions.length > 0) {
+                                return (
+                                    <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 border-t pt-2">
+                                        <div className="col-span-2">
+                                            <p className="text-[10px] uppercase font-bold text-gray-400 mb-0.5">Acompañantes</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {companions.map((c: any, i: number) => (
+                                                    <span key={i} className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1">
+                                                        <User size={8} />
+                                                        {c.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
                     </div>
                 </div>
             )}

@@ -2,12 +2,14 @@
 import { z } from "zod";
 
 /**
- * Base schema for a reservation — shared by Create & Update
+ * Base schema definition (without Refine)
  */
-const BaseReservationSchema = z.object({
+const ReservationBase = z.object({
     guest_id: z.number().int(),
 
-    room_id: z.number().int(),
+    // Room ID is now potentially nullable/optional in base,
+    // enforced later via superRefine based on fulfillment_type
+    room_id: z.number().int().nullish(),
 
     company_id: z.number().int().nullable().optional(),
 
@@ -39,20 +41,58 @@ const BaseReservationSchema = z.object({
     invoice_status: z.string().nullish(),
     invoice_notes: z.string().nullish(),
     invoice_date: z.string().nullish(),
+
+    // External Referral
+    fulfillment_type: z.enum(["INTERNAL", "EXTERNAL"]).default("INTERNAL"),
+    external_lodging_name: z.string().nullish(),
+    external_sale_total: z.number().nonnegative().optional(),
+    external_supplier_cost_total: z.number().nonnegative().optional(),
+    external_supplier_payment_status: z.enum(["PENDING", "PAID"]).default("PENDING"),
+    external_notes: z.string().nullish(),
 }).passthrough();
 
+/**
+ * Validation Logic shared by Create and Update
+ */
+const refineReservation = (data: z.infer<typeof ReservationBase>, ctx: z.RefinementCtx) => {
+    // 1. VALIDACIÓN INTERNA
+    if (data.fulfillment_type === "INTERNAL") {
+        if (!data.room_id) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Debe seleccionar una habitación para reservas internas",
+                path: ["room_id"],
+            });
+        }
+    }
+
+    // 2. VALIDACIÓN EXTERNA (DERIVACIÓN)
+    if (data.fulfillment_type === "EXTERNAL") {
+        if (!data.external_lodging_name || data.external_lodging_name.trim() === "") {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Nombre del hostal externo es obligatorio",
+                path: ["external_lodging_name"],
+            });
+        }
+        // Validar montos si es necesario (opcional)
+        // Ejemplo: si se requiere que sale_total > 0
+    }
+};
 
 /**
  * CREATE — does NOT include ID
  */
-export const ReservationSchema = BaseReservationSchema;
+export const ReservationSchema = ReservationBase.superRefine(refineReservation);
 
 /**
  * UPDATE — includes ID
  */
-export const ReservationUpdateSchema = BaseReservationSchema.extend({
+export const ReservationUpdateSchema = ReservationBase.extend({
     id: z.number().int(),
-});
+}).superRefine(refineReservation); // Re-apply validation since extend returns ZodObject (before refine) is incorrect?
+// Start: extend works on ZodObject. ReservationBase is ZodObject.
+// So: Base.extend(..).superRefine(...) works. Correct.
 
 export type ReservationInput = z.infer<typeof ReservationSchema>;
 export type ReservationUpdateInput = z.infer<typeof ReservationUpdateSchema>;

@@ -31,6 +31,9 @@ export type DaybookEntry = {
     discount_type_snapshot?: string | null;
     discount_value_snapshot?: number | null;
     credit_days_snapshot?: number | null;
+    // External
+    fulfillment_type?: string;
+    external_lodging_name?: string | null;
 };
 
 // ==========================
@@ -57,6 +60,7 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
       arrival_time, breakfast_time,
       company_name_snapshot, billing_type,
       discount_type_snapshot, discount_value_snapshot, credit_days_snapshot,
+      fulfillment_type, external_lodging_name,
       hostal_rooms (name, room_type, sort_order),
       hostal_guests (full_name),
       hostal_companies (name)
@@ -74,8 +78,10 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
     const mapped = (data ?? []).map((row: any) => ({
         id: row.id,
         room_id: row.room_id,
-        room_name: row.hostal_rooms?.name || `Hab ${row.room_id}`,
-        room_type: row.hostal_rooms?.room_type || "Estándar",
+        room_name: row.fulfillment_type === 'EXTERNAL'
+            ? `Derivación: ${row.external_lodging_name || '?'}`
+            : (row.hostal_rooms?.name || `Hab ${row.room_id}`),
+        room_type: row.fulfillment_type === 'EXTERNAL' ? 'Externo' : (row.hostal_rooms?.room_type || "Estándar"),
         guest_name: row.hostal_guests?.full_name || "Sin Huésped",
         company_name: row.company_name_snapshot || row.hostal_companies?.name || null,
         check_in: row.check_in,
@@ -99,6 +105,8 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
         discount_type_snapshot: row.discount_type_snapshot,
         discount_value_snapshot: row.discount_value_snapshot,
         credit_days_snapshot: row.credit_days_snapshot,
+        fulfillment_type: row.fulfillment_type,
+        external_lodging_name: row.external_lodging_name,
         // Internal for sorting
         _sort_order: row.hostal_rooms?.sort_order ?? 999
     }));

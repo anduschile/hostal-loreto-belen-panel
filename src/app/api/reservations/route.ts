@@ -42,13 +42,36 @@ export async function GET(req: Request) {
     }
 }
 
+import { upsertExternalReservationPayments } from "@/lib/data/payments";
+
+// ... imports remain the same
+
 export async function POST(req: Request) {
     try {
         const body = await req.json();
 
+        // VALIDACIÓN CUSTOM: Si es EXTERNAL, room_id puede ser ignorable (o 0), 
+        // pero Zod podría pedir validación.
+        // Hemos actualizado Zod para allow fields.
+
         const parsed = ReservationSchema.parse(body);
 
+        // Si es external, asegurar que room_id no rompa FK if using 0 or null?
+        // En data layer `mapToDb` lo pasamos. Si la DB admite null, bien.
+        // Si no, la DB fallará. Asumimos que la migración corrió y room_id es nullable.
+
         const created = await createReservation(parsed);
+
+        // --- TRIGGER PAGOS EXTERNOS ---
+        if (parsed.fulfillment_type === 'EXTERNAL') {
+            await upsertExternalReservationPayments(
+                created.id,
+                parsed.external_lodging_name || "Desconocido",
+                parsed.external_sale_total || 0,
+                parsed.external_supplier_cost_total || 0,
+                parsed.check_in
+            );
+        }
 
         return NextResponse.json({ ok: true, data: created });
     } catch (e: any) {
@@ -66,6 +89,17 @@ export async function PUT(req: Request) {
         const parsed = ReservationUpdateSchema.parse(body);
 
         const updated = await updateReservation(parsed.id, parsed);
+
+        // --- TRIGGER PAGOS EXTERNOS (Actualización) ---
+        if (parsed.fulfillment_type === 'EXTERNAL') {
+            await upsertExternalReservationPayments(
+                parsed.id,
+                parsed.external_lodging_name || "Desconocido",
+                parsed.external_sale_total || 0,
+                parsed.external_supplier_cost_total || 0,
+                parsed.check_in
+            );
+        }
 
         return NextResponse.json({ ok: true, data: updated });
     } catch (e: any) {

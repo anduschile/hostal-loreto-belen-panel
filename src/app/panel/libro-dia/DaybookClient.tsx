@@ -6,7 +6,7 @@ import { DaybookEntry } from "@/lib/data/daybook";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { Users, Clock, LogIn, LogOut, Coffee, FileText, CheckSquare, Pencil, Save, X } from "lucide-react";
+import { Users, Clock, LogIn, LogOut, Coffee, FileText, CheckSquare, Pencil, Save, X, ExternalLink, CheckCircle } from "lucide-react";
 
 type Props = {
     initialDate: string;
@@ -137,7 +137,8 @@ export default function DaybookClient({ initialDate, entries }: Props) {
     );
 
     const staying = entries.filter(r => {
-        return r.status === "checked_in" && r.check_out > date;
+        return (r.status === "checked_in" || r.status === "confirmed") && r.check_out > date;
+        // Note: For External, 'confirmed' is the active state usually.
     });
 
     const formatDateShort = (isoDate: string) => {
@@ -164,7 +165,7 @@ export default function DaybookClient({ initialDate, entries }: Props) {
                             <span className="text-xs font-bold text-gray-500">
                                 {r.room_name}
                                 <span className="font-normal text-gray-400 mx-1">•</span>
-                                {r.id}
+                                {r.room_id ? r.id : `#${r.id}`}
                             </span>
                             <h3 className="font-bold text-gray-900 line-clamp-1 text-base">
                                 {r.guest_name || "Sin Huésped"}
@@ -309,23 +310,39 @@ export default function DaybookClient({ initialDate, entries }: Props) {
                 {/* MAIN ACTIONS (Checkin/Checkout) */}
                 <div className="pl-2 pt-2 mt-auto border-t border-gray-100">
                     {type === "arrival" && (
-                        <button
-                            onClick={() => updateStatus(r.id, "checked_in", "Check-in")}
-                            disabled={isUpdating}
-                            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
-                        >
-                            <LogIn size={16} /> Check-in
-                        </button>
+                        r.fulfillment_type === 'EXTERNAL' ? (
+                            <button
+                                onClick={() => updateStatus(r.id, "confirmed", "Confirmar Derivación")}
+                                disabled={isUpdating || r.status === "confirmed"}
+                                className={`w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm ${r.status === "confirmed" ? 'bg-green-600 hover:bg-green-600 opacity-60' : ''}`}
+                            >
+                                {r.status === "confirmed" ? <><CheckCircle size={16} /> Confirmado</> : <><ExternalLink size={16} /> Confirmar Derivación</>}
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => updateStatus(r.id, "checked_in", "Check-in")}
+                                disabled={isUpdating}
+                                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
+                            >
+                                <LogIn size={16} /> Check-in
+                            </button>
+                        )
                     )}
 
                     {type === "departure" && (
-                        <button
-                            onClick={() => updateStatus(r.id, "checked_out", "Check-out")}
-                            disabled={isUpdating}
-                            className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
-                        >
-                            <LogOut size={16} /> Check-out
-                        </button>
+                        r.fulfillment_type === 'EXTERNAL' ? (
+                            <div className="text-center py-1 text-xs text-gray-400 bg-gray-50 rounded italic">
+                                Derivación Finaliza
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => updateStatus(r.id, "checked_out", "Check-out")}
+                                disabled={isUpdating}
+                                className="w-full py-2 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
+                            >
+                                <LogOut size={16} /> Check-out
+                            </button>
+                        )
                     )}
 
                     {type === "stay" && (

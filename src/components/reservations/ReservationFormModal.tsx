@@ -15,6 +15,7 @@ import {
     Clock,
     FileDown,
     Mail,
+    ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Reservation, Guest, HostalRoom } from "@/types/hostal";
@@ -39,7 +40,7 @@ type Props = {
 const COMPANION_TAG_START = "[COMPANIONS_JSON]";
 const COMPANION_TAG_END = "[/COMPANIONS_JSON]";
 
-type Companion = { name: string; document: string };
+type Companion = { name: string; document: string; guest_id?: number };
 
 // --- ICONS ---
 const EditIcon = () => (
@@ -123,6 +124,13 @@ export default function ReservationFormModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCreatingGuest, setIsCreatingGuest] = useState(false);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+    // External Referral
+    const [formFulfillmentType, setFormFulfillmentType] = useState<"INTERNAL" | "EXTERNAL">("INTERNAL");
+    const [formExternalLodgingName, setFormExternalLodgingName] = useState("");
+    const [formExternalSaleTotal, setFormExternalSaleTotal] = useState("");
+    const [formExternalSupplierCostTotal, setFormExternalSupplierCostTotal] = useState("");
+    const [formExternalNotes, setFormExternalNotes] = useState("");
 
     // --- COMPUTED ---
     const selectedCompanyData = useMemo(() => {
@@ -245,7 +253,15 @@ export default function ReservationFormModal({
             setFormInvoiceNotes(r.invoice_notes || "");
 
             setFormArrivalTime(r.arrival_time || "");
+            setFormArrivalTime(r.arrival_time || "");
             setFormBreakfastTime(r.breakfast_time || "");
+
+            // External Referral
+            setFormFulfillmentType(r.fulfillment_type || "INTERNAL");
+            setFormExternalLodgingName(r.external_lodging_name || "");
+            setFormExternalSaleTotal(r.external_sale_total ? String(r.external_sale_total) : "");
+            setFormExternalSupplierCostTotal(r.external_supplier_cost_total ? String(r.external_supplier_cost_total) : "");
+            setFormExternalNotes(r.external_notes || "");
         } else {
             // NUEVA RESERVA
             setFormRoomId(initialData?.roomId ? String(initialData.roomId) : "");
@@ -280,8 +296,18 @@ export default function ReservationFormModal({
             setFormCompanions([]);
             setNewCompName("");
             setNewCompDoc("");
+            setCompanionSearchTerm("");
+            setSelectedCompanionGuestId(null);
+            setFormArrivalTime("");
             setFormArrivalTime("");
             setFormBreakfastTime("");
+
+            // External Default
+            setFormFulfillmentType("INTERNAL");
+            setFormExternalLodgingName("");
+            setFormExternalSaleTotal("");
+            setFormExternalSupplierCostTotal("");
+            setFormExternalNotes("");
         }
 
         setIsSubmitting(false);
@@ -298,12 +324,82 @@ export default function ReservationFormModal({
 
     const handleAddCompanion = () => {
         if (!newCompName) return;
+
+        // Validation: Check if titular
+        if (selectedCompanionGuestId && String(selectedCompanionGuestId) === formGuestId) {
+            toast.error("El titular ya está en la reserva, no puede ser acompañante.");
+            return;
+        }
+
+        // Validation: Check duplicates
+        if (selectedCompanionGuestId) {
+            const exists = formCompanions.some(c => c.guest_id === selectedCompanionGuestId);
+            if (exists) {
+                toast.error("Este huésped ya fue agregado como acompañante.");
+                return;
+            }
+        }
+
         setFormCompanions([
             ...formCompanions,
-            { name: newCompName, document: newCompDoc },
+            {
+                name: newCompName,
+                document: newCompDoc,
+                guest_id: selectedCompanionGuestId || undefined
+            },
         ]);
         setNewCompName("");
         setNewCompDoc("");
+        setSelectedCompanionGuestId(null);
+        setCompanionSearchTerm(""); // Reset search term
+    };
+
+    // --- COMPANION SEARCH STATE ---
+    const [companionSearchTerm, setCompanionSearchTerm] = useState("");
+    const [companionSearchResults, setCompanionSearchResults] = useState<Guest[]>([]);
+    const [isSearchingCompanions, setIsSearchingCompanions] = useState(false);
+    const [showCompanionDropdown, setShowCompanionDropdown] = useState(false);
+    const [selectedCompanionGuestId, setSelectedCompanionGuestId] = useState<number | null>(null);
+
+    // Debounced search for companions
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(async () => {
+            if (companionSearchTerm.length < 2) {
+                setCompanionSearchResults([]);
+                setShowCompanionDropdown(false);
+                return;
+            }
+
+            // Only search if we haven't selected a guest yet (to avoid searching when just displaying selected name)
+            // But here we want to allow searching always in the input. 
+            // We'll use a flag or just check if it matches exactly? 
+            // Simplest: Always search if term changed. 
+
+            setIsSearchingCompanions(true);
+            try {
+                const res = await fetch(`/api/guests/search?q=${encodeURIComponent(companionSearchTerm)}`);
+                const data = await res.json();
+                if (data.ok) {
+                    setCompanionSearchResults(data.data);
+                    setShowCompanionDropdown(true);
+                }
+            } catch (error) {
+                console.error("Error searching companions", error);
+            } finally {
+                setIsSearchingCompanions(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [companionSearchTerm]);
+
+    const selectCompanionFromSearch = (guest: Guest) => {
+        setNewCompName(guest.full_name);
+        setNewCompDoc(guest.document_id || "");
+        setSelectedCompanionGuestId(guest.id);
+        setShowCompanionDropdown(false);
+        // We keep the search term as the name so the user sees who they selected
+        setCompanionSearchTerm(guest.full_name);
     };
 
     const removeCompanion = (idx: number) => {
@@ -356,7 +452,16 @@ export default function ReservationFormModal({
     // Internal function to save the reservation and optionally update guest
     // Returns { ok: boolean, reservationId?: number, error?: string }
     const handleSaveInternal = async (): Promise<{ ok: boolean, reservationId?: number, data?: any, error?: string }> => {
-        if (!formRoomId) return { ok: false, error: "Debes seleccionar una habitación" };
+        // Validation
+        if (formFulfillmentType === "INTERNAL") {
+            if (!formRoomId) return { ok: false, error: "Debes seleccionar una habitación (Interna)" };
+        } else {
+            // EXTERNAL
+            if (!formExternalLodgingName) return { ok: false, error: "Debes ingresar el nombre del Hostal Externo" };
+            if (!formExternalSaleTotal) return { ok: false, error: "Debes ingresar el total de venta (cobro a cliente)" };
+            if (!formExternalSupplierCostTotal) return { ok: false, error: "Debes ingresar el costo del proveedor" };
+        }
+
         if (!formGuestId) return { ok: false, error: "Debes seleccionar un huésped" };
         if (formCheckOut <= formCheckIn) return { ok: false, error: "La fecha de salida debe ser posterior a la de entrada" };
 
@@ -368,7 +473,7 @@ export default function ReservationFormModal({
         }
 
         const payload: any = {
-            room_id: Number(formRoomId),
+            room_id: formFulfillmentType === "INTERNAL" ? Number(formRoomId) : null, // Nullable if external
             guest_id: Number(formGuestId),
             company_id: formCompanyId ? Number(formCompanyId) : null,
             check_in: formCheckIn,
@@ -390,7 +495,17 @@ export default function ReservationFormModal({
             company_name_snapshot: selectedCompanyData?.name || null,
             billing_type: formBillingType,
             discount_type_snapshot: selectedCompanyData?.discount_type || null,
+            company_name_snapshot: selectedCompanyData?.name || null,
+            billing_type: formBillingType,
+            discount_type_snapshot: selectedCompanyData?.discount_type || null,
             discount_value_snapshot: selectedCompanyData?.discount_value || null,
+
+            // External Referral
+            fulfillment_type: formFulfillmentType,
+            external_lodging_name: formFulfillmentType === "EXTERNAL" ? formExternalLodgingName : null,
+            external_sale_total: formFulfillmentType === "EXTERNAL" ? Number(formExternalSaleTotal) : null,
+            external_supplier_cost_total: formFulfillmentType === "EXTERNAL" ? Number(formExternalSupplierCostTotal) : null,
+            external_notes: formFulfillmentType === "EXTERNAL" ? (formExternalNotes || null) : null,
         };
 
         const rAny: any = reservationToEdit;
@@ -638,11 +753,38 @@ export default function ReservationFormModal({
                     <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
                         {/* LEFT COLUMN */}
                         <div className="lg:col-span-8 space-y-8">
-                            {/* 1. ESTADÍA */}
+                            {/* 1. ESTADÍA Y HABITACIÓN (con selector de Cumplimiento) */}
                             <section>
-                                <h4 className="flex items-center gap-2 text-sm font-bold text-blue-600 uppercase tracking-wider mb-4 border-b pb-2">
-                                    <Calendar size={16} /> Estadía y Habitación
-                                </h4>
+                                <div className="flex items-center justify-between mb-4 border-b pb-2">
+                                    <h4 className="flex items-center gap-2 text-sm font-bold text-blue-600 uppercase tracking-wider">
+                                        <Calendar size={16} /> Estadía y Habitación
+                                    </h4>
+
+                                    {/* SELECTOR DE CUMPLIMIENTO */}
+                                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormFulfillmentType("INTERNAL")}
+                                            className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${formFulfillmentType === "INTERNAL"
+                                                    ? "bg-white text-blue-600 shadow-sm"
+                                                    : "text-gray-500 hover:text-gray-700"
+                                                }`}
+                                        >
+                                            Interno
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormFulfillmentType("EXTERNAL")}
+                                            className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${formFulfillmentType === "EXTERNAL"
+                                                    ? "bg-white text-orange-600 shadow-sm"
+                                                    : "text-gray-500 hover:text-gray-700"
+                                                }`}
+                                        >
+                                            Derivación
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
@@ -670,23 +812,47 @@ export default function ReservationFormModal({
                                             />
                                         </div>
                                     </div>
+
+                                    {/* CONDITIONAL: Room vs External Info */}
                                     <div>
-                                        <label className="block text-sm font-medium mb-1 text-gray-700">
-                                            Habitación *
-                                        </label>
-                                        <select
-                                            value={formRoomId}
-                                            onChange={(e) => setFormRoomId(e.target.value)}
-                                            className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 border p-2.5 bg-white"
-                                            required
-                                        >
-                                            <option value="">-- Seleccionar --</option>
-                                            {rooms.map((r) => (
-                                                <option key={r.id} value={r.id}>
-                                                    {r.name} - {r.room_type} (Cap: {r.capacity_adults})
-                                                </option>
-                                            ))}
-                                        </select>
+                                        {formFulfillmentType === "INTERNAL" ? (
+                                            <>
+                                                <label className="block text-sm font-medium mb-1 text-gray-700">
+                                                    Habitación *
+                                                </label>
+                                                <select
+                                                    value={formRoomId}
+                                                    onChange={(e) => setFormRoomId(e.target.value)}
+                                                    className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 border p-2.5 bg-white"
+                                                    required
+                                                >
+                                                    <option value="">-- Seleccionar --</option>
+                                                    {rooms.map((r) => (
+                                                        <option key={r.id} value={r.id}>
+                                                            {r.name} - {r.room_type} (Cap: {r.capacity_adults})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <label className="block text-sm font-medium mb-1 text-orange-700">
+                                                    Hostal / Proveedor Externo *
+                                                </label>
+                                                <div className="relative">
+                                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                        <ExternalLink size={14} className="text-orange-500" />
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        value={formExternalLodgingName}
+                                                        onChange={(e) => setFormExternalLodgingName(e.target.value)}
+                                                        className="w-full border-orange-200 rounded-lg shadow-sm focus:ring-orange-500 focus:border-orange-500 border p-2.5 pl-9 bg-orange-50"
+                                                        placeholder="Nombre del Hostal"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
@@ -720,6 +886,61 @@ export default function ReservationFormModal({
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* EXTERNAL FINANCIALS */}
+                                {formFulfillmentType === "EXTERNAL" && (
+                                    <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-100">
+                                        <h5 className="text-xs font-bold text-orange-700 uppercase mb-3 flex items-center gap-2">
+                                            <CreditCard size={14} /> Datos Financieros de Derivación
+                                        </h5>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold mb-1 text-gray-700">
+                                                    Total Venta (A Cobrar) *
+                                                </label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-2.5 text-gray-500">$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={formExternalSaleTotal}
+                                                        onChange={(e) => setFormExternalSaleTotal(e.target.value)}
+                                                        className="w-full border p-2 pl-6 rounded text-sm font-bold text-gray-800"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 mt-1">Se factura al cliente</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold mb-1 text-gray-700">
+                                                    Total Costo (A Pagar) *
+                                                </label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-2.5 text-gray-500">$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={formExternalSupplierCostTotal}
+                                                        onChange={(e) => setFormExternalSupplierCostTotal(e.target.value)}
+                                                        className="w-full border p-2 pl-6 rounded text-sm text-gray-600"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 mt-1">Se paga al proveedor</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1 text-gray-700">
+                                                    Notas Derivación
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={formExternalNotes}
+                                                    onChange={(e) => setFormExternalNotes(e.target.value)}
+                                                    className="w-full border p-2 rounded text-sm"
+                                                    placeholder="Detalles..."
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </section>
 
                             {/* 2. TITULAR */}
@@ -935,38 +1156,7 @@ export default function ReservationFormModal({
                                 </div>
                             </section>
 
-                            {/* HORARIOS */}
-                            <section>
-                                <h4 className="flex items-center gap-2 text-sm font-bold text-blue-600 uppercase tracking-wider mb-4 border-b pb-2">
-                                    <Clock size={16} /> Horarios (Opcional)
-                                </h4>
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1 text-gray-700">
-                                            Hora de Llegada
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={formArrivalTime}
-                                            onChange={(e) => setFormArrivalTime(e.target.value)}
-                                            className="w-full border p-2.5 rounded-lg border-gray-300"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1 text-gray-700">
-                                            Hora Desayuno
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={formBreakfastTime}
-                                            onChange={(e) => setFormBreakfastTime(e.target.value)}
-                                            className="w-full border p-2.5 rounded-lg border-gray-300"
-                                        />
-                                    </div>
-                                </div>
-                            </section>
-
-                            {/* ACOMPAÑANTES */}
+                            {/* 3. ACOMPAÑANTES */}
                             <section>
                                 <h4 className="flex items-center gap-2 text-sm font-bold text-blue-600 uppercase tracking-wider mb-4 border-b pb-2">
                                     <User size={16} /> Acompañantes
@@ -1002,18 +1192,65 @@ export default function ReservationFormModal({
                                         )}
                                     </div>
 
-                                    <div className="flex gap-2 items-end">
-                                        <div className="flex-1">
+                                    <div className="flex gap-2 items-end relative">
+                                        <div className="flex-1 relative">
                                             <label className="block text-xs font-medium mb-1 text-gray-600">
-                                                Nombre Completo
+                                                Buscar / Nombre Completo
                                             </label>
-                                            <input
-                                                type="text"
-                                                value={newCompName}
-                                                onChange={(e) => setNewCompName(e.target.value)}
-                                                className="w-full border p-2 rounded text-sm"
-                                                placeholder="Nombre del acompañante"
-                                            />
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={companionSearchTerm} // Bind to search term instead of newCompName directly
+                                                    onChange={(e) => {
+                                                        setCompanionSearchTerm(e.target.value);
+                                                        setNewCompName(e.target.value); // Sync for manual entry
+                                                        if (selectedCompanionGuestId) {
+                                                            // If user types after selecting, clear selection to allow "new" or "search again"
+                                                            setSelectedCompanionGuestId(null);
+                                                            setNewCompDoc("");
+                                                        }
+                                                    }}
+                                                    onFocus={() => {
+                                                        if (companionSearchTerm.length >= 2) setShowCompanionDropdown(true);
+                                                    }}
+                                                    // OnBlur handling is tricky with click events in dropdown. 
+                                                    // Usually handled by click-outside listener or timeout.
+                                                    // For now relying on click selection.
+                                                    className={`w-full border p-2 rounded text-sm ${selectedCompanionGuestId ? 'border-green-500 bg-green-50' : ''}`}
+                                                    placeholder="Buscar o escribir nombre..."
+                                                    autoComplete="off"
+                                                />
+                                                {isSearchingCompanions && (
+                                                    <div className="absolute right-2 top-2">
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* DROPDOWN RESULTADOS */}
+                                            {showCompanionDropdown && companionSearchResults.length > 0 && (
+                                                <>
+                                                    <div
+                                                        className="fixed inset-0 z-10"
+                                                        onClick={() => setShowCompanionDropdown(false)}
+                                                    ></div>
+                                                    <div className="absolute top-full left-0 w-full bg-white border rounded-lg shadow-xl mt-1 z-20 max-h-48 overflow-auto">
+                                                        {companionSearchResults.map((g) => (
+                                                            <div
+                                                                key={g.id}
+                                                                onClick={() => selectCompanionFromSearch(g)}
+                                                                className="p-2 hover:bg-blue-50 cursor-pointer text-sm border-b last:border-0 flex flex-col"
+                                                            >
+                                                                <span className="font-bold">{g.full_name}</span>
+                                                                <span className="text-gray-500 text-xs">
+                                                                    {g.document_id ? `Doc: ${g.document_id}` : 'Sin doc'}
+                                                                    {g.email ? ` • ${g.email}` : ''}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                         <div className="w-1/3">
                                             <label className="block text-xs font-medium mb-1 text-gray-600">
@@ -1025,12 +1262,18 @@ export default function ReservationFormModal({
                                                 onChange={(e) => setNewCompDoc(e.target.value)}
                                                 className="w-full border p-2 rounded text-sm"
                                                 placeholder="DNI / Pasaporte"
+                                                readOnly={!!selectedCompanionGuestId} // Read-only if selected from list? Or allow edit? 
+                                            // User might want to update it. Let's allowing edit but maybe Visual cue?
+                                            // Requirement says "Evitar duplicados", so preserving ID is key.
+                                            // If they edit the doc, does it matter? It updates the companion entry locally.
+                                            // Ideally valid guests shouldn't need doc edit here.
                                             />
                                         </div>
                                         <button
                                             type="button"
                                             onClick={handleAddCompanion}
-                                            className="bg-blue-100 text-blue-700 p-2 rounded hover:bg-blue-200 font-bold text-sm"
+                                            className="bg-blue-100 text-blue-700 p-2 rounded hover:bg-blue-200 font-bold text-sm h-[38px] w-[38px] flex items-center justify-center"
+                                            title="Agregar Acompañante"
                                         >
                                             <Plus size={18} />
                                         </button>
@@ -1038,7 +1281,40 @@ export default function ReservationFormModal({
                                 </div>
                             </section>
 
-                            {/* DETALLES */}
+
+
+                            {/* 4. HORARIOS */}
+                            <section>
+                                <h4 className="flex items-center gap-2 text-sm font-bold text-blue-600 uppercase tracking-wider mb-4 border-b pb-2">
+                                    <Clock size={16} /> Horarios (Opcional)
+                                </h4>
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700">
+                                            Hora de Llegada
+                                        </label>
+                                        <input
+                                            type="time"
+                                            value={formArrivalTime}
+                                            onChange={(e) => setFormArrivalTime(e.target.value)}
+                                            className="w-full border p-2.5 rounded-lg border-gray-300"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700">
+                                            Hora Desayuno
+                                        </label>
+                                        <input
+                                            type="time"
+                                            value={formBreakfastTime}
+                                            onChange={(e) => setFormBreakfastTime(e.target.value)}
+                                            className="w-full border p-2.5 rounded-lg border-gray-300"
+                                        />
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* 5. DETALLES */}
                             <section>
                                 <h4 className="flex items-center gap-2 text-sm font-bold text-blue-600 uppercase tracking-wider mb-4 border-b pb-2">
                                     <FileText size={16} /> Detalles

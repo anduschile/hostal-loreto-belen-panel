@@ -31,6 +31,9 @@ export type CalendarReservation = {
     companions_json?: any | null;
     company_name_snapshot?: string | null;
     billing_type?: string;
+    // External
+    fulfillment_type?: string;
+    external_lodging_name?: string | null;
 };
 
 export type CalendarData = {
@@ -43,6 +46,8 @@ export type CalendarFilters = {
     room_type?: string | null;
     company_id?: number | null;
 };
+
+export const EXTERNAL_ROOM_ID = 99999;
 
 export async function getCalendarData(
     from: string,
@@ -84,6 +89,7 @@ export async function getCalendarData(
       adults, children, code, source,
       invoice_number, invoice_status, invoice_notes, invoice_date, companions_json,
       company_name_snapshot, billing_type,
+      fulfillment_type, external_lodging_name,
       hostal_guests ( full_name ),
       hostal_companies ( name )
     `
@@ -118,9 +124,14 @@ export async function getCalendarData(
         status: r.status,
     }));
 
+    // Inject "Derivaciones" room if needed? 
+    // Better to let the frontend/wrapper decide to show it, but we need the reservations mapped to a consistent ID.
+    // If room_id is null, it's EXTERNAL. Map it to EXTERNAL_ROOM_ID.
+
     const reservations: CalendarReservation[] = (resData || []).map((r: any) => ({
         id: r.id,
-        room_id: r.room_id,
+        // Map NULL room_id to EXTERNAL_ROOM_ID
+        room_id: r.room_id ?? (r.fulfillment_type === 'EXTERNAL' ? EXTERNAL_ROOM_ID : null),
         guest_id: r.guest_id,
         company_id: r.company_id,
         guest_name: r.hostal_guests?.full_name || "Sin Huésped",
@@ -141,6 +152,8 @@ export async function getCalendarData(
         companions_json: r.companions_json,
         company_name_snapshot: r.company_name_snapshot,
         billing_type: r.billing_type,
+        fulfillment_type: r.fulfillment_type,
+        external_lodging_name: r.external_lodging_name,
     }));
 
     return { rooms, reservations };

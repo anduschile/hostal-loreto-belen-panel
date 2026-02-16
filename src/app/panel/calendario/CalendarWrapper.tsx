@@ -14,6 +14,7 @@ import {
     CalendarData,
     CalendarReservation,
     CalendarRoom,
+    EXTERNAL_ROOM_ID,
 } from "@/lib/data/calendar";
 import CalendarHeader from "./CalendarHeader";
 import ReservationFormModal from "@/components/reservations/ReservationFormModal";
@@ -21,6 +22,7 @@ import { HostalRoom, Guest, Reservation } from "@/types/hostal";
 import { useRouter } from "next/navigation";
 import CalendarMonthView from "./CalendarMonthView";
 import CalendarTimelineView from "./CalendarTimelineView";
+import { ExternalLink } from "lucide-react";
 
 type Props = {
     initialData: CalendarData;
@@ -111,7 +113,25 @@ export default function CalendarWrapper({
             const res = await fetch(`/api/calendar?${params.toString()}`);
             const json = await res.json();
             if (json.ok) {
-                setData(json.data);
+                // INJECT EXTERNAL ROW
+                const apiData = json.data as CalendarData;
+                const activeExternalReservations = apiData.reservations.filter(r => r.room_id === EXTERNAL_ROOM_ID);
+
+                // Add External Room if it has reservations OR always (User requested "Always visible")
+                // Adding always for consistency
+                const externalRoom: CalendarRoom = {
+                    id: EXTERNAL_ROOM_ID,
+                    name: "Derivaciones",
+                    type: "Externo",
+                    capacity: 0,
+                    status: "active"
+                };
+
+                setData({
+                    rooms: [...apiData.rooms, externalRoom],
+                    reservations: apiData.reservations
+                });
+
             } else {
                 console.error(json.error);
             }

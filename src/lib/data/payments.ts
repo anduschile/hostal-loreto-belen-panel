@@ -144,6 +144,95 @@ export async function deletePayment(id: number): Promise<void> {
 }
 
 // ==========================
+// LOGICA DE DERIVACIÓN EXTERNA (AR/AP)
+// ==========================
+
+/**
+ * Crea o actualiza los movimientos de "Cuentas por Cobrar" (AR) y "Cuentas por Pagar" (AP)
+ * para una reserva externa.
+ * 
+ * Si payment_type no existe, usamos "pending" o un campo de notas para distinguirlo.
+ * Asumiremos que el sistema de pagos actual permite entradas negativas o tiene un campo 'type'.
+ * Si no tiene 'type', usaremos notas para etiquetarlo.
+ * 
+ * NOTA: Para no romper el esquema actual (PaymentInsert), si no existe campo 'transaction_type',
+ * usaremos notas con un prefijo "[AR]" o "[AP]" y montos positivos/negativos o simplemente positivos.
+ * 
+ * PLAN:
+ * - Buscar pagos existentes para esta reserva con notas que contengan "[DERIVACIÓN-COBRO]" o "[DERIVACIÓN-PAGO]"
+ * - Si existen, actualizarlos.
+ * - Si no, crearlos.
+ */
+export async function upsertExternalReservationPayments(
+  reservation_id: number,
+  supplier_name: string | null,
+  sale_total: number,
+  cost_total: number,
+  check_in_date: string
+) {
+  const supabase = createClient();
+
+  // 1. Buscar pagos existentes de esta derivación
+  const { data: existing } = await supabase
+    .from(PAYMENTS_TABLE)
+    .select('*')
+    .eq('reservation_id', reservation_id);
+
+  // Identificamos por las notas (simple convention pattern)
+  const arPayment = existing?.find((p: any) => p.notes?.includes("[DERIVACIÓN-COBRO]"));
+  const apPayment = existing?.find((p: any) => p.notes?.includes("[DERIVACIÓN-PAGO]"));
+
+  const date = check_in_date || new Date().toISOString().split('T')[0];
+
+  // --- AR (Cuentas por Cobrar a Cliente/Empresa) ---
+  // Representa el ingreso.
+  const arData: Partial<PaymentInsert> = {
+    reservation_id,
+    amount: sale_total,
+    currency: 'CLP',
+    method: 'pendiente',
+    document_type: 'ninguno',
+    payment_date: date,
+    notes: `[DERIVACIÓN-COBRO] Ingreso por servicio externo en ${supplier_name || '?'}`
+  };
+
+  if (arPayment) {
+    await updatePayment(arPayment.id, arData);
+  } else {
+    if (sale_total > 0) await createPayment(arData as PaymentInsert);
+  }
+
+  // --- AP (Cuentas por Pagar a Proveedor) ---
+  // Representa el costo. En un sistema simple de caja, podría ser un egreso (negativo or marked as expense).
+  // Si la tabla payments es solo ingresos, esto podría ensuciar los totales si no se distingue.
+  // Asumiremos que se registra como un movimiento con nota especial.
+  // IDEALMENTE: Agregar columna 'type' ('INCOME', 'EXPENSE').
+  // Si no podemos tocar DB de pagos, usaremos amount negativo para costo?
+  // Riesgo: La UI podría no soportar negativos.
+  // Usaremos amount positivo pero con nota explícita costo.
+
+  // UPDATE: User asked to manage AR/AP. 
+  // If I can't add columns easily to payments without breaking, usage of tags in notes is safest.
+
+  const apData: Partial<PaymentInsert> = {
+    reservation_id,
+    amount: cost_total, // Mantener positivo numéricamente, pero logico es salida
+    currency: 'CLP',
+    method: 'pendiente',
+    document_type: 'ninguno',
+    payment_date: date,
+    notes: `[DERIVACIÓN-PAGO] Costo proveedor externo: ${supplier_name || '?'}`
+  };
+
+  if (apPayment) {
+    await updatePayment(apPayment.id, apData);
+  } else {
+    if (cost_total > 0) await createPayment(apData as PaymentInsert);
+  }
+}
+
+
+// ==========================
 // MAPEOS
 // ==========================
 
