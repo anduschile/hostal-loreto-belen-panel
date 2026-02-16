@@ -45,8 +45,8 @@ const ReservationBase = z.object({
     // External Referral
     fulfillment_type: z.enum(["INTERNAL", "EXTERNAL"]).default("INTERNAL"),
     external_lodging_name: z.string().nullish(),
-    external_sale_total: z.number().nonnegative().optional(),
-    external_supplier_cost_total: z.number().nonnegative().optional(),
+    external_sale_total: z.number().nonnegative().nullish(), // Changed to nullish to accept null
+    external_supplier_cost_total: z.number().nonnegative().nullish(), // Changed to nullish to accept null
     external_supplier_payment_status: z.enum(["PENDING", "PAID"]).default("PENDING"),
     external_notes: z.string().nullish(),
 }).passthrough();
@@ -75,8 +75,23 @@ const refineReservation = (data: z.infer<typeof ReservationBase>, ctx: z.Refinem
                 path: ["external_lodging_name"],
             });
         }
-        // Validar montos si es necesario (opcional)
-        // Ejemplo: si se requiere que sale_total > 0
+
+        // Validar montos obligatorios para EXTERNAL
+        if (data.external_sale_total === null || data.external_sale_total === undefined) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Ingresa Total Venta",
+                path: ["external_sale_total"],
+            });
+        }
+
+        if (data.external_supplier_cost_total === null || data.external_supplier_cost_total === undefined) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Ingresa Total Costo",
+                path: ["external_supplier_cost_total"],
+            });
+        }
     }
 };
 

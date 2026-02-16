@@ -50,9 +50,14 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
 
-        // VALIDACIÓN CUSTOM: Si es EXTERNAL, room_id puede ser ignorable (o 0), 
-        // pero Zod podría pedir validación.
-        // Hemos actualizado Zod para allow fields.
+        // NORMALIZACIÓN DE PAYLOAD
+        // Si es INTERNAL, limpiamos los campos externos para evitar errores de validación
+        if (body.fulfillment_type === 'INTERNAL') {
+            body.external_sale_total = undefined;
+            body.external_supplier_cost_total = undefined;
+            body.external_lodging_name = undefined;
+            body.external_notes = undefined;
+        }
 
         const parsed = ReservationSchema.parse(body);
 
@@ -85,6 +90,14 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
     try {
         const body = await req.json();
+
+        // NORMALIZACIÓN DE PAYLOAD (Igual que POST)
+        if (body.fulfillment_type === 'INTERNAL') {
+            body.external_sale_total = undefined;
+            body.external_supplier_cost_total = undefined;
+            body.external_lodging_name = undefined;
+            body.external_notes = undefined;
+        }
 
         const parsed = ReservationUpdateSchema.parse(body);
 

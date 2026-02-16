@@ -502,10 +502,10 @@ export default function ReservationFormModal({
 
             // External Referral
             fulfillment_type: formFulfillmentType,
-            external_lodging_name: formFulfillmentType === "EXTERNAL" ? formExternalLodgingName : null,
-            external_sale_total: formFulfillmentType === "EXTERNAL" ? Number(formExternalSaleTotal) : null,
-            external_supplier_cost_total: formFulfillmentType === "EXTERNAL" ? Number(formExternalSupplierCostTotal) : null,
-            external_notes: formFulfillmentType === "EXTERNAL" ? (formExternalNotes || null) : null,
+            external_lodging_name: formFulfillmentType === "EXTERNAL" ? formExternalLodgingName : undefined,
+            external_sale_total: formFulfillmentType === "EXTERNAL" ? Number(formExternalSaleTotal) : undefined,
+            external_supplier_cost_total: formFulfillmentType === "EXTERNAL" ? Number(formExternalSupplierCostTotal) : undefined,
+            external_notes: formFulfillmentType === "EXTERNAL" ? (formExternalNotes || undefined) : undefined,
         };
 
         const rAny: any = reservationToEdit;
@@ -766,8 +766,8 @@ export default function ReservationFormModal({
                                             type="button"
                                             onClick={() => setFormFulfillmentType("INTERNAL")}
                                             className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${formFulfillmentType === "INTERNAL"
-                                                    ? "bg-white text-blue-600 shadow-sm"
-                                                    : "text-gray-500 hover:text-gray-700"
+                                                ? "bg-white text-blue-600 shadow-sm"
+                                                : "text-gray-500 hover:text-gray-700"
                                                 }`}
                                         >
                                             Interno
@@ -776,8 +776,8 @@ export default function ReservationFormModal({
                                             type="button"
                                             onClick={() => setFormFulfillmentType("EXTERNAL")}
                                             className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${formFulfillmentType === "EXTERNAL"
-                                                    ? "bg-white text-orange-600 shadow-sm"
-                                                    : "text-gray-500 hover:text-gray-700"
+                                                ? "bg-white text-orange-600 shadow-sm"
+                                                : "text-gray-500 hover:text-gray-700"
                                                 }`}
                                         >
                                             Derivación
