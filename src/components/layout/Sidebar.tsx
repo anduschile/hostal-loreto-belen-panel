@@ -12,6 +12,7 @@ import {
     Users,
     Building2,
     CreditCard,
+    UtensilsCrossed,
     BarChart3,
     Settings,
     Menu,
@@ -28,6 +29,7 @@ const navItems = [
     { label: "Huéspedes", href: "/panel/huespedes", icon: Users },
     { label: "Empresas", href: "/panel/empresas", icon: Building2 },
     { label: "Pagos", href: "/panel/pagos", icon: CreditCard },
+    { label: "Menús", href: "/panel/menus", icon: UtensilsCrossed },
     { label: "Reportes", href: "/panel/reportes", icon: BarChart3 },
     // "Usuarios" will be conditionally rendered
     { label: "Usuarios", href: "/panel/usuarios", icon: Settings, roleRequired: "superadmin" },

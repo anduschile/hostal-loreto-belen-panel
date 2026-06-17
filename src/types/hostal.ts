@@ -205,3 +205,100 @@ export interface PaymentInsert {
   payment_date: string; // YYYY-MM-DD
   notes?: string | null;
 }
+
+// ---- MENÚS ----
+export interface HostalMenu {
+  id: number;
+  nombre: string;
+  descripcion?: string | null;
+  foto_url?: string | null;
+  ingredientes?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MenuInsert {
+  nombre: string;
+  descripcion?: string | null;
+  foto_url?: string | null;
+  ingredientes?: string | null;
+  is_active?: boolean;
+}
+
+// ---- PRECIOS DE MENÚ ----
+export interface MenuPrice {
+  id: number;
+  menu_id: number;
+  company_id?: number | null;
+  tipo_servicio: "almuerzo" | "cena";
+  precio: number;
+  vigente_desde: string; // YYYY-MM-DD
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MenuPriceInsert {
+  menu_id: number;
+  company_id?: number | null;
+  tipo_servicio: "almuerzo" | "cena";
+  precio: number;
+  vigente_desde?: string; // YYYY-MM-DD, defaults to today
+  is_active?: boolean;
+}
+
+// ---- SERVICIOS DE COMIDA ----
+export interface MealService {
+  id: number;
+  fecha: string; // YYYY-MM-DD
+  tipo_servicio: "almuerzo" | "cena";
+  menu_a_id: number;
+  menu_b_id: number;
+  notas?: string | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MealServiceInsert {
+  fecha: string; // YYYY-MM-DD
+  tipo_servicio: "almuerzo" | "cena";
+  menu_a_id: number;
+  menu_b_id: number;
+  notas?: string | null;
+  created_by?: number | null;
+}
+
+// ---- CONSUMO DE COMIDA ----
+export type MealChoiceType = "A" | "B";
+export type MealWhatsappStatus = "pendiente" | "enviado" | "respondido" | "sin_respuesta";
+
+export interface MealConsumption {
+  id: number;
+  meal_service_id: number;
+  guest_id: number;
+  reservation_id?: number | null;
+  company_id?: number | null;
+  eleccion?: MealChoiceType | null;
+  estado_whatsapp: MealWhatsappStatus;
+  whatsapp_enviado_at?: string | null;
+  precio_snapshot?: number | null;
+  menu_servido_id?: number | null;
+  notas?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MealConsumptionInsert {
+  meal_service_id: number;
+  guest_id: number;
+  reservation_id?: number | null;
+  company_id?: number | null;
+  eleccion?: MealChoiceType | null;
+  estado_whatsapp?: MealWhatsappStatus;
+  whatsapp_enviado_at?: string | null;
+  precio_snapshot?: number | null;
+  menu_servido_id?: number | null;
+  notas?: string | null;
+}

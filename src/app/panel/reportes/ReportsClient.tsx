@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DetailedStats } from "@/lib/data/stats";
 import { formatCurrencyCLP } from "@/lib/formatters";
+import MealServiceReport from "@/components/reports/MealServiceReport";
 
 type Props = {
     initialFrom: string;
@@ -22,6 +23,7 @@ export default function ReportsClient({
     const [from, setFrom] = useState(initialFrom);
     const [to, setTo] = useState(initialTo);
     const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<"general" | "meals">("general");
 
     useEffect(() => {
         setLoading(false);
@@ -68,6 +70,32 @@ export default function ReportsClient({
                 }
             `}</style>
 
+            {/* --- TABS --- */}
+            <div className="flex gap-4 mb-6 border-b">
+                <button
+                    onClick={() => setActiveTab("general")}
+                    className={`px-4 py-2 font-medium border-b-2 ${
+                        activeTab === "general"
+                            ? "border-emerald-600 text-emerald-600"
+                            : "border-transparent text-gray-600 hover:text-gray-900"
+                    }`}
+                >
+                    General
+                </button>
+                <button
+                    onClick={() => setActiveTab("meals")}
+                    className={`px-4 py-2 font-medium border-b-2 ${
+                        activeTab === "meals"
+                            ? "border-emerald-600 text-emerald-600"
+                            : "border-transparent text-gray-600 hover:text-gray-900"
+                    }`}
+                >
+                    Servicios de Comida
+                </button>
+            </div>
+
+            {activeTab === "general" && (
+            <>
             {/* --- FILTROS --- */}
             <div className="bg-white p-4 rounded shadow flex flex-wrap gap-4 items-end no-print">
                 <div>
@@ -235,6 +263,12 @@ export default function ReportsClient({
                     </table>
                 </div>
             </div>
+            </>
+            )}
+
+            {activeTab === "meals" && (
+            <MealServiceReport />
+            )}
         </div>
     );
 }
