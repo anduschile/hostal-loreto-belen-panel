@@ -36,10 +36,10 @@ export default function MenuPriceManager({ menuId }: Props) {
       if (!pricesRes.ok || !companiesRes.ok) throw new Error("Failed to fetch");
 
       const { data: pricesData } = await pricesRes.json();
-      const { data: companiesData } = await companiesRes.json();
+      const companiesData = await companiesRes.json();
 
-      setPrices(pricesData);
-      setCompanies(companiesData);
+      setPrices(pricesData || []);
+      setCompanies(companiesData || []);
     } catch (err: any) {
       setError(err.message);
     } finally {

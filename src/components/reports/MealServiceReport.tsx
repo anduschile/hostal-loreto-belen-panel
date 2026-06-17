@@ -27,10 +27,11 @@ export default function MealServiceReport() {
     try {
       const res = await fetch("/api/companies");
       if (res.ok) {
-        const { data } = await res.json();
-        setCompanies(data);
+        const companiesData = await res.json();
+        const companies = companiesData || [];
+        setCompanies(companies);
         // Default to Multiexport if it exists
-        const multiexport = data.find(
+        const multiexport = companies.find(
           (c: Company) => c.name.toLowerCase().includes("multiexport")
         );
         if (multiexport) {
@@ -117,7 +118,7 @@ export default function MealServiceReport() {
     }
   };
 
-  const totalPrice = reportData.reduce((sum, row) => sum + (row.precio || 0), 0);
+  const totalPrice = reportData.reduce((sum, row) => sum + (row.precio ? row.precio : 0), 0);
 
   return (
     <div className="space-y-4">
@@ -232,9 +233,11 @@ export default function MealServiceReport() {
                     <td className="border px-4 py-2 capitalize">
                       {row.tipo_servicio}
                     </td>
-                    <td className="border px-4 py-2">{row.menu_nombre}</td>
+                    <td className="border px-4 py-2">
+                      {row.eleccion ? row.menu_nombre : <span className="text-gray-500 italic">Sin respuesta</span>}
+                    </td>
                     <td className="border px-4 py-2 text-right font-semibold">
-                      ${row.precio?.toFixed(2) || "0.00"}
+                      {row.precio !== null ? `$${row.precio.toFixed(2)}` : <span className="text-gray-500 italic">Pendiente de confirmar</span>}
                     </td>
                   </tr>
                 ))}

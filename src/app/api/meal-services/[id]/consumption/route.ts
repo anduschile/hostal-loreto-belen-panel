@@ -36,17 +36,23 @@ export async function POST(
 
     // If action is "autoload", fetch active reservations for this date
     if (action === "autoload") {
-      // Get reservations for the given date with status IN ('confirmed', 'checked_in')
-      const reservations = await getReservations({
-        fromDate: fecha,
-        toDate: fecha,
-        status: undefined, // Will filter manually
-      });
+      // Get reservations that cover the given date (check_in <= fecha AND check_out >= fecha)
+      // with status IN ('confirmed', 'checked_in')
+      const { createClient } = await import("@/lib/supabase/server");
+      const supabase = await createClient();
 
-      // Filter for confirmed and checked_in status
-      const activeReservations = reservations.filter(
-        (r) => r.status === "confirmed" || r.status === "checked_in"
-      );
+      const { data: reservations, error } = await supabase
+        .from("hostal_reservations")
+        .select("id, guest_id, company_id, status")
+        .lte("check_in", fecha)
+        .gte("check_out", fecha)
+        .in("status", ["confirmed", "checked_in"]);
+
+      if (error) {
+        throw new Error(`Failed to fetch reservations: ${error.message}`);
+      }
+
+      const activeReservations = reservations || [];
 
       // Create meal consumption for each active reservation
       const consumptions = activeReservations.map((reservation) => ({

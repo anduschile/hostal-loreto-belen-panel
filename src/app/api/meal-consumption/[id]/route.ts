@@ -75,6 +75,11 @@ export async function PUT(
 
     return NextResponse.json({ ok: true, data: updated });
   } catch (e: any) {
+    console.error("[meal-consumption PUT] Error:", {
+      message: e.message,
+      code: e.code,
+      details: e.details,
+    });
     return NextResponse.json(
       { ok: false, error: e.message },
       { status: 400 }

@@ -31,12 +31,12 @@ export async function GET(req: Request) {
       Huésped: row.guest_full_name,
       Empresa: row.company_name || "Particular",
       "Tipo Servicio": row.tipo_servicio,
-      "Menú Servido": row.menu_nombre,
-      Precio: row.precio,
+      "Menú Servido": row.eleccion ? row.menu_nombre : "Sin respuesta",
+      Precio: row.precio !== null ? row.precio : "Pendiente de confirmar",
     }));
 
     // Add totals row
-    const totalPrice = mealData.reduce((sum, row) => sum + (row.precio || 0), 0);
+    const totalPrice = mealData.reduce((sum, row) => sum + (row.precio ? row.precio : 0), 0);
     mealSheetData.push({
       Fecha: "TOTAL",
       Huésped: "",

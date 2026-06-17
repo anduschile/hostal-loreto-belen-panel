@@ -69,23 +69,23 @@ ALTER TABLE hostal_menu_prices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hostal_meal_services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hostal_meal_consumption ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy for menus: admins and reception can do everything
-CREATE POLICY "Enable all for admins and reception" ON hostal_menus
-    FOR ALL USING (
-        (SELECT role FROM hostal_users WHERE id = auth.uid()) IN ('superadmin', 'recepcion')
-    );
+-- RLS Policy: replica el patrón de hostal_companies (acceso abierto a autenticados)
+CREATE POLICY "Enable all access for admins and reception" ON hostal_menus
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);
 
-CREATE POLICY "Enable all for admins and reception" ON hostal_menu_prices
-    FOR ALL USING (
-        (SELECT role FROM hostal_users WHERE id = auth.uid()) IN ('superadmin', 'recepcion')
-    );
+CREATE POLICY "Enable all access for admins and reception" ON hostal_menu_prices
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);
 
-CREATE POLICY "Enable all for admins and reception" ON hostal_meal_services
-    FOR ALL USING (
-        (SELECT role FROM hostal_users WHERE id = auth.uid()) IN ('superadmin', 'recepcion')
-    );
+CREATE POLICY "Enable all access for admins and reception" ON hostal_meal_services
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);
 
-CREATE POLICY "Enable all for admins and reception" ON hostal_meal_consumption
-    FOR ALL USING (
-        (SELECT role FROM hostal_users WHERE id = auth.uid()) IN ('superadmin', 'recepcion')
-    );
+CREATE POLICY "Enable all access for admins and reception" ON hostal_meal_consumption
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);

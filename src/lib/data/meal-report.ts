@@ -7,6 +7,7 @@ export interface MealReportRow {
   tipo_servicio: string;
   menu_nombre: string;
   precio: number | null;
+  eleccion: "A" | "B" | null;
 }
 
 export interface MealReportSummary {
@@ -25,6 +26,24 @@ export async function getMealReportData(
 ): Promise<MealReportRow[]> {
   const client = await createClient();
 
+  // Step 1: Get meal service IDs in the date range
+  const { data: mealServices, error: mealServicesError } = await client
+    .from("hostal_meal_services")
+    .select("id")
+    .gte("fecha", fromDate)
+    .lte("fecha", toDate);
+
+  if (mealServicesError) {
+    throw new Error(`Failed to fetch meal services: ${mealServicesError.message}`);
+  }
+
+  const mealServiceIds = (mealServices || []).map((ms: any) => ms.id);
+
+  if (mealServiceIds.length === 0) {
+    return [];
+  }
+
+  // Step 2: Get meal consumption records for those meal services (regardless of choice status)
   let query = client
     .from("hostal_meal_consumption")
     .select(`
@@ -32,11 +51,10 @@ export async function getMealReportData(
       hostal_guests(full_name),
       hostal_companies(name),
       hostal_menus(nombre),
-      precio_snapshot
+      precio_snapshot,
+      eleccion
     `)
-    .not("eleccion", "is", null) // Only those who made a choice
-    .gte("hostal_meal_services.fecha", fromDate)
-    .lte("hostal_meal_services.fecha", toDate);
+    .in("meal_service_id", mealServiceIds);
 
   if (companyId) {
     query = query.eq("company_id", companyId);
@@ -52,7 +70,8 @@ export async function getMealReportData(
     company_name: row.hostal_companies?.name || null,
     tipo_servicio: row.hostal_meal_services?.tipo_servicio || "",
     menu_nombre: row.hostal_menus?.nombre || "Desconocido",
-    precio: row.precio_snapshot || 0,
+    precio: row.precio_snapshot || null,
+    eleccion: row.eleccion || null,
   }));
 }
 

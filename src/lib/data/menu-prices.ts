@@ -25,11 +25,19 @@ export async function getPriceForMenu(
   const client = await createClient();
 
   // First try to find exact match (menu_id, company_id, tipo_servicio, is_active)
-  const { data, error } = await client
+  let query = client
     .from(TABLE_NAME)
     .select("*")
-    .eq("menu_id", menuId)
-    .eq("company_id", companyId)
+    .eq("menu_id", menuId);
+
+  // Handle company_id: use IS NULL for null values, EQ for numeric values
+  if (companyId === null) {
+    query = query.is("company_id", null);
+  } else {
+    query = query.eq("company_id", companyId);
+  }
+
+  const { data, error } = await query
     .eq("tipo_servicio", tipoServicio)
     .eq("is_active", true)
     .lte("vigente_desde", fecha)

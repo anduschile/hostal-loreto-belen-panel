@@ -59,7 +59,7 @@ export default function MealConsumptionTable({
 
       if (companiesRes.ok) {
         const companiesJson = await companiesRes.json();
-        companiesData = companiesJson.data || [];
+        companiesData = companiesJson || [];
       }
 
       const guestsMap: Record<number, any> = {};
