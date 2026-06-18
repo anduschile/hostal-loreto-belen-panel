@@ -37,6 +37,8 @@ export interface Company {
   credit_days: number;
   discount_type: 'porcentaje' | 'monto_fijo' | 'ninguno';
   discount_value: number;
+  precio_preferencial?: number;
+  precio_normal?: number;
   created_at: string;
   updated_at: string;
 }
@@ -257,6 +259,7 @@ export interface MealService {
   menu_b_id: number;
   notas?: string | null;
   created_by?: number | null;
+  tipo_precio?: "preferencial" | "normal";
   created_at: string;
   updated_at: string;
 }
@@ -268,6 +271,7 @@ export interface MealServiceInsert {
   menu_b_id: number;
   notas?: string | null;
   created_by?: number | null;
+  tipo_precio?: "preferencial" | "normal";
 }
 
 // ---- CONSUMO DE COMIDA ----

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { MealService, HostalMenu } from "@/types/hostal";
 import MealConsumptionTable from "@/components/menus/MealConsumptionTable";
+import { formatDateCL } from "@/lib/utils/date";
 import { toast } from "sonner";
 
 export default function ProgramarPage() {
@@ -116,7 +117,7 @@ export default function ProgramarPage() {
         </button>
 
         <h1 className="text-3xl font-bold mb-4">
-          Programación del {mealService.fecha}
+          Programación del {formatDateCL(mealService.fecha)}
         </h1>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

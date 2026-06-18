@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getMealConsumptionById, updateMealConsumption } from "@/lib/data/meal-consumption";
 import { getMealServiceById } from "@/lib/data/meal-services";
 import { getPriceForMenu } from "@/lib/data/menu-prices";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -32,33 +33,47 @@ export async function PUT(
       // Determine which menu was chosen
       const menuId = body.eleccion === "A" ? mealService.menu_a_id : mealService.menu_b_id;
 
-      // Try to resolve price
-      let precio = 0;
+      // Try to resolve price using new model (company prices)
       let priceSnapshot: number | null = null;
 
-      // First try: company-specific price
-      const companyPrice = await getPriceForMenu(
-        menuId,
-        consumption.company_id || null,
-        mealService.tipo_servicio as "almuerzo" | "cena",
-        mealService.fecha
-      );
+      if (consumption.company_id) {
+        const client = await createClient();
+        const { data: company } = await client
+          .from("hostal_companies")
+          .select("precio_preferencial, precio_normal")
+          .eq("id", consumption.company_id)
+          .single();
 
-      if (companyPrice) {
-        priceSnapshot = companyPrice.precio;
-        precio = companyPrice.precio;
-      } else if (consumption.company_id) {
-        // Second try: public price (company_id = null)
-        const publicPrice = await getPriceForMenu(
+        if (company) {
+          const tipoPrecio = mealService.tipo_precio || "preferencial";
+          priceSnapshot = tipoPrecio === "preferencial"
+            ? company.precio_preferencial
+            : company.precio_normal;
+        }
+      }
+
+      // Fallback to old model if new model doesn't have price
+      if (!priceSnapshot) {
+        const companyPrice = await getPriceForMenu(
           menuId,
-          null,
+          consumption.company_id || null,
           mealService.tipo_servicio as "almuerzo" | "cena",
           mealService.fecha
         );
 
-        if (publicPrice) {
-          priceSnapshot = publicPrice.precio;
-          precio = publicPrice.precio;
+        if (companyPrice) {
+          priceSnapshot = companyPrice.precio;
+        } else if (consumption.company_id) {
+          const publicPrice = await getPriceForMenu(
+            menuId,
+            null,
+            mealService.tipo_servicio as "almuerzo" | "cena",
+            mealService.fecha
+          );
+
+          if (publicPrice) {
+            priceSnapshot = publicPrice.precio;
+          }
         }
       }
 

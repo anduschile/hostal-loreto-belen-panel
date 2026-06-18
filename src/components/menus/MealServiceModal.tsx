@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Modal from "@/components/Modal";
-import { HostalMenu, MealService } from "@/types/hostal";
+import { HostalMenu, MealService, Company } from "@/types/hostal";
 
 interface Props {
   open: boolean;
@@ -26,13 +26,18 @@ export default function MealServiceModal({
   );
   const [menuAId, setMenuAId] = useState(mealService?.menu_a_id || "");
   const [menuBId, setMenuBId] = useState(mealService?.menu_b_id || "");
+  const [tipoPrecio, setTipoPrecio] = useState<"preferencial" | "normal">(
+    mealService?.tipo_precio || "preferencial"
+  );
   const [notas, setNotas] = useState(mealService?.notas || "");
   const [error, setError] = useState("");
   const [loadingMenus, setLoadingMenus] = useState(true);
+  const [multiexportPrices, setMultiexportPrices] = useState<{ preferencial: number; normal: number } | null>(null);
 
   useEffect(() => {
     if (open) {
       fetchMenus();
+      fetchMultiexportPrices();
     }
   }, [open]);
 
@@ -47,6 +52,24 @@ export default function MealServiceModal({
       setError(err.message);
     } finally {
       setLoadingMenus(false);
+    }
+  };
+
+  const fetchMultiexportPrices = async () => {
+    try {
+      const res = await fetch("/api/companies");
+      if (!res.ok) return;
+      const data = await res.json();
+      const companies = Array.isArray(data) ? data : data.data || [];
+      const multiexport = companies.find((c: Company) => c.name.toLowerCase().includes("multiexport"));
+      if (multiexport) {
+        setMultiexportPrices({
+          preferencial: multiexport.precio_preferencial || 0,
+          normal: multiexport.precio_normal || 0,
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch multiexport prices:", err);
     }
   };
 
@@ -75,6 +98,7 @@ export default function MealServiceModal({
         tipo_servicio: tipoServicio,
         menu_a_id: parseInt(menuAId as string),
         menu_b_id: parseInt(menuBId as string),
+        tipo_precio: tipoPrecio,
         notas: notas.trim() || null,
       });
 
@@ -83,6 +107,7 @@ export default function MealServiceModal({
       setTipoServicio("almuerzo");
       setMenuAId("");
       setMenuBId("");
+      setTipoPrecio("preferencial");
       setNotas("");
       onClose();
     } catch (err: any) {
@@ -130,6 +155,27 @@ export default function MealServiceModal({
               <option value="almuerzo">Almuerzo</option>
               <option value="cena">Cena</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Tipo de Precio *
+            </label>
+            <select
+              value={tipoPrecio}
+              onChange={(e) =>
+                setTipoPrecio(e.target.value as "preferencial" | "normal")
+              }
+              className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="preferencial">Preferencial</option>
+              <option value="normal">Normal</option>
+            </select>
+            {multiexportPrices && (
+              <p className="text-xs text-gray-500 mt-1">
+                Multiexport - Preferencial: ${multiexportPrices.preferencial.toLocaleString('es-CL')} | Normal: ${multiexportPrices.normal.toLocaleString('es-CL')}
+              </p>
+            )}
           </div>
 
           <div>

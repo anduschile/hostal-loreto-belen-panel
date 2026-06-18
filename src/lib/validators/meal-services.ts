@@ -18,6 +18,7 @@ const MealServiceBase = z
     menu_b_id: z.number().int().positive("Menu B ID debe ser positivo"),
     notas: z.string().nullish(),
     created_by: z.number().int().nullish(),
+    tipo_precio: z.enum(["preferencial", "normal"]).optional(),
   })
   .passthrough();
 

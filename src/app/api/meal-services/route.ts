@@ -31,6 +31,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, data: created }, { status: 201 });
   } catch (e: any) {
+    console.error("[meal-services POST] Error:", {
+      message: e.message,
+      code: e.code,
+      details: e.details,
+    });
     return NextResponse.json(
       { ok: false, error: e.message },
       { status: 400 }

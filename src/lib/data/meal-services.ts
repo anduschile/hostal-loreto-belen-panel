@@ -74,6 +74,7 @@ export async function createMealService(input: MealServiceInsert): Promise<MealS
     menu_b_id: input.menu_b_id,
     notas: input.notas || null,
     created_by: input.created_by || null,
+    tipo_precio: input.tipo_precio || 'preferencial',
   };
 
   const { data, error } = await client
@@ -98,6 +99,7 @@ export async function updateMealService(
   if (input.menu_a_id !== undefined) payload.menu_a_id = input.menu_a_id;
   if (input.menu_b_id !== undefined) payload.menu_b_id = input.menu_b_id;
   if (input.notas !== undefined) payload.notas = input.notas || null;
+  if (input.tipo_precio !== undefined) payload.tipo_precio = input.tipo_precio;
 
   payload.updated_at = new Date().toISOString();
 

@@ -7,8 +7,10 @@ export interface MealReportRow {
   tipo_servicio: string;
   menu_nombre: string;
   precio: number | null;
+  precio_con_iva: number | null;
   eleccion: "A" | "B" | null;
   estado_servicio: "activo" | "anulado";
+  tipo_precio?: string;
 }
 
 export interface MealReportSummary {
@@ -23,16 +25,23 @@ export interface MealReportSummary {
 export async function getMealReportData(
   fromDate: string,
   toDate: string,
-  companyId?: number
+  companyId?: number,
+  tipoServicio?: string | null
 ): Promise<MealReportRow[]> {
   const client = await createClient();
 
   // Step 1: Get meal service IDs in the date range
-  const { data: mealServices, error: mealServicesError } = await client
+  let mealServicesQuery = client
     .from("hostal_meal_services")
     .select("id")
     .gte("fecha", fromDate)
     .lte("fecha", toDate);
+
+  if (tipoServicio && tipoServicio !== "ambos") {
+    mealServicesQuery = mealServicesQuery.eq("tipo_servicio", tipoServicio);
+  }
+
+  const { data: mealServices, error: mealServicesError } = await mealServicesQuery;
 
   if (mealServicesError) {
     throw new Error(`Failed to fetch meal services: ${mealServicesError.message}`);
@@ -66,16 +75,21 @@ export async function getMealReportData(
 
   if (error) throw new Error(`Failed to fetch meal report: ${error.message}`);
 
-  return (data || []).map((row: any) => ({
-    fecha: row.hostal_meal_services?.fecha || "",
-    guest_full_name: row.hostal_guests?.full_name || "Desconocido",
-    company_name: row.hostal_companies?.name || null,
-    tipo_servicio: row.hostal_meal_services?.tipo_servicio || "",
-    menu_nombre: row.hostal_menus?.nombre || "Desconocido",
-    precio: row.precio_snapshot || null,
-    eleccion: row.eleccion || null,
-    estado_servicio: row.estado_servicio || "activo",
-  }));
+  return (data || []).map((row: any) => {
+    const precio = row.precio_snapshot || null;
+    const precio_con_iva = precio !== null ? Math.round(precio * 1.19) : null;
+    return {
+      fecha: row.hostal_meal_services?.fecha || "",
+      guest_full_name: row.hostal_guests?.full_name || "Desconocido",
+      company_name: row.hostal_companies?.name || null,
+      tipo_servicio: row.hostal_meal_services?.tipo_servicio || "",
+      menu_nombre: row.hostal_menus?.nombre || "Desconocido",
+      precio,
+      precio_con_iva,
+      eleccion: row.eleccion || null,
+      estado_servicio: row.estado_servicio || "activo",
+    };
+  });
 }
 
 export async function getMealReportSummary(

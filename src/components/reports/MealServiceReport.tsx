@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Company } from "@/types/hostal";
+import { formatDateCL, formatCurrencyCLP } from "@/lib/utils/date";
 
 export default function MealServiceReport() {
   const [fromDate, setFromDate] = useState(
@@ -84,6 +85,10 @@ export default function MealServiceReport() {
         params.append("company_id", selectedCompanyId);
       }
 
+      if (tipoServicio) {
+        params.append("tipo_servicio", tipoServicio);
+      }
+
       const selectedCompany = companies.find(
         (c) => c.id.toString() === selectedCompanyId
       );
@@ -96,29 +101,23 @@ export default function MealServiceReport() {
       );
       if (!res.ok) throw new Error("Failed to export");
 
-      const { data } = await res.json();
-
-      // Import xlsx and export
-      const XLSX = await import("xlsx");
-      const workbook = XLSX.utils.book_new();
-
-      // Meal sheet
-      const mealSheet = XLSX.utils.json_to_sheet(data.mealSheet);
-      XLSX.utils.book_append_sheet(workbook, mealSheet, "Comidas");
-
-      // Summary sheet
-      const summarySheet = XLSX.utils.json_to_sheet(data.summarySheet);
-      XLSX.utils.book_append_sheet(workbook, summarySheet, "Resumen");
-
-      // Download
-      const filename = `reporte_comidas_${data.companyName}_${data.fromDate}_${data.toDate}.xlsx`;
-      XLSX.writeFile(workbook, filename);
+      // Backend now returns binary Excel file directly
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.headers.get("content-disposition")?.split("filename=")[1]?.replace(/"/g, "") || "reporte_comidas.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (err: any) {
       setError(err.message);
     }
   };
 
-  const totalPrice = reportData.reduce((sum, row) => sum + (row.precio ? row.precio : 0), 0);
+  const totalPriceNeto = reportData.reduce((sum, row) => sum + (row.precio ? row.precio : 0), 0);
+  const totalPriceConIva = reportData.reduce((sum, row) => sum + (row.precio_con_iva ? row.precio_con_iva : 0), 0);
 
   return (
     <div className="space-y-4">
@@ -221,14 +220,17 @@ export default function MealServiceReport() {
                     Estado Servicio
                   </th>
                   <th className="border px-4 py-2 text-right font-semibold">
-                    Precio
+                    Precio Neto
+                  </th>
+                  <th className="border px-4 py-2 text-right font-semibold">
+                    Precio con IVA
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {reportData.map((row, idx) => (
                   <tr key={idx} className={row.estado_servicio === "anulado" ? "bg-gray-100" : "hover:bg-gray-50"}>
-                    <td className="border px-4 py-2">{row.fecha}</td>
+                    <td className="border px-4 py-2">{formatDateCL(row.fecha)}</td>
                     <td className="border px-4 py-2">{row.guest_full_name}</td>
                     <td className="border px-4 py-2">
                       {row.company_name || "Particular"}
@@ -249,16 +251,22 @@ export default function MealServiceReport() {
                       </span>
                     </td>
                     <td className="border px-4 py-2 text-right font-semibold">
-                      {row.precio !== null ? `$${row.precio.toFixed(2)}` : <span className="text-gray-500 italic">Pendiente de confirmar</span>}
+                      {row.precio !== null ? formatCurrencyCLP(row.precio) : <span className="text-gray-500 italic">Pendiente</span>}
+                    </td>
+                    <td className="border px-4 py-2 text-right font-semibold">
+                      {row.precio_con_iva !== null ? formatCurrencyCLP(row.precio_con_iva) : <span className="text-gray-500 italic">Pendiente</span>}
                     </td>
                   </tr>
                 ))}
                 <tr className="font-bold bg-emerald-50">
-                  <td colSpan={5} className="border px-4 py-2 text-right">
+                  <td colSpan={6} className="border px-4 py-2 text-right">
                     TOTAL:
                   </td>
                   <td className="border px-4 py-2 text-right text-emerald-600">
-                    ${totalPrice.toFixed(2)}
+                    {formatCurrencyCLP(totalPriceNeto)}
+                  </td>
+                  <td className="border px-4 py-2 text-right text-emerald-600">
+                    {formatCurrencyCLP(totalPriceConIva)}
                   </td>
                 </tr>
               </tbody>

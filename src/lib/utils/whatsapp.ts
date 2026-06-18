@@ -72,6 +72,8 @@ export function buildWhatsappMessage(params: WhatsappMessageParams): WhatsappMes
   mensaje += `\n`;
 
   mensaje += `Respóndenos con *1* o *2* para tener tu plato listo cuando llegues.\n\n`;
+  mensaje += `⏰ *Plazo máximo para confirmar tu elección: el día anterior a tu llegada antes de las 20:00 hrs.*\n`;
+  mensaje += `Si no confirmas antes del plazo, el hostal te asignará una de las opciones disponibles.\n\n`;
   mensaje += `Saludos`;
 
   const phoneNormalized = normalizePhoneNumber(params.phoneNumber);

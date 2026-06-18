@@ -9,6 +9,7 @@ export async function GET(req: Request) {
     const fromDate = searchParams.get("from");
     const toDate = searchParams.get("to");
     const companyIdParam = searchParams.get("company_id");
+    const tipoServicio = searchParams.get("tipo_servicio");
 
     if (!fromDate || !toDate) {
       return NextResponse.json(
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
 
     const companyId = companyIdParam ? parseInt(companyIdParam, 10) : undefined;
 
-    const data = await getMealReportData(fromDate, toDate, companyId);
+    const data = await getMealReportData(fromDate, toDate, companyId, tipoServicio);
 
     return NextResponse.json({ ok: true, data });
   } catch (e: any) {

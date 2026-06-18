@@ -5,6 +5,7 @@ import MenuFormModal from "@/components/menus/MenuFormModal";
 import MenuPriceManager from "@/components/menus/MenuPriceManager";
 import MealServiceModal from "@/components/menus/MealServiceModal";
 import { HostalMenu, MealService } from "@/types/hostal";
+import { formatDateCL } from "@/lib/utils/date";
 import { toast } from "sonner";
 
 export default function MenusPage() {
@@ -309,7 +310,7 @@ export default function MenusPage() {
                 <tbody>
                   {mealServices.map((service) => (
                     <tr key={service.id} className="hover:bg-gray-50">
-                      <td className="border px-4 py-2">{service.fecha}</td>
+                      <td className="border px-4 py-2">{formatDateCL(service.fecha)}</td>
                       <td className="border px-4 py-2 capitalize">
                         {service.tipo_servicio}
                       </td>

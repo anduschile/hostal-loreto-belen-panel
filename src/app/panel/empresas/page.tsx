@@ -18,6 +18,8 @@ type Company = {
     discount_type: 'porcentaje' | 'monto_fijo' | 'ninguno';
     discount_value: number;
     credit_days: number;
+    precio_preferencial?: number;
+    precio_normal?: number;
     is_active: boolean;
 };
 
@@ -42,6 +44,8 @@ export default function CompaniesPage() {
         discount_type: "ninguno",
         discount_value: 0,
         credit_days: 0,
+        precio_preferencial: 0,
+        precio_normal: 0,
         is_active: true
     });
 
@@ -82,6 +86,8 @@ export default function CompaniesPage() {
             discount_type: "ninguno",
             discount_value: 0,
             credit_days: 0,
+            precio_preferencial: 0,
+            precio_normal: 0,
             is_active: true
         });
         setIsModalOpen(true);
@@ -330,6 +336,28 @@ export default function CompaniesPage() {
                                             />
                                         </div>
                                     )}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Precio Preferencial (neto)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                            value={formData.precio_preferencial || 0}
+                                            onChange={e => setFormData({ ...formData, precio_preferencial: parseFloat(e.target.value) || 0 })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Precio Normal (neto)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                            value={formData.precio_normal || 0}
+                                            onChange={e => setFormData({ ...formData, precio_normal: parseFloat(e.target.value) || 0 })}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
