@@ -217,6 +217,9 @@ export default function MealServiceReport() {
                   <th className="border px-4 py-2 text-left font-semibold">
                     Menú Servido
                   </th>
+                  <th className="border px-4 py-2 text-left font-semibold">
+                    Estado Servicio
+                  </th>
                   <th className="border px-4 py-2 text-right font-semibold">
                     Precio
                   </th>
@@ -224,7 +227,7 @@ export default function MealServiceReport() {
               </thead>
               <tbody>
                 {reportData.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
+                  <tr key={idx} className={row.estado_servicio === "anulado" ? "bg-gray-100" : "hover:bg-gray-50"}>
                     <td className="border px-4 py-2">{row.fecha}</td>
                     <td className="border px-4 py-2">{row.guest_full_name}</td>
                     <td className="border px-4 py-2">
@@ -235,6 +238,15 @@ export default function MealServiceReport() {
                     </td>
                     <td className="border px-4 py-2">
                       {row.eleccion ? row.menu_nombre : <span className="text-gray-500 italic">Sin respuesta</span>}
+                    </td>
+                    <td className="border px-4 py-2 text-sm">
+                      <span className={`px-2 py-1 rounded ${
+                        row.estado_servicio === "anulado"
+                          ? "bg-red-100 text-red-700 font-semibold"
+                          : "bg-green-100 text-green-700"
+                      }`}>
+                        {row.estado_servicio === "anulado" ? "Anulado" : "Activo"}
+                      </span>
                     </td>
                     <td className="border px-4 py-2 text-right font-semibold">
                       {row.precio !== null ? `$${row.precio.toFixed(2)}` : <span className="text-gray-500 italic">Pendiente de confirmar</span>}

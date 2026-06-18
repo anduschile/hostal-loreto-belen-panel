@@ -8,6 +8,7 @@ export interface MealReportRow {
   menu_nombre: string;
   precio: number | null;
   eleccion: "A" | "B" | null;
+  estado_servicio: "activo" | "anulado";
 }
 
 export interface MealReportSummary {
@@ -52,7 +53,8 @@ export async function getMealReportData(
       hostal_companies(name),
       hostal_menus(nombre),
       precio_snapshot,
-      eleccion
+      eleccion,
+      estado_servicio
     `)
     .in("meal_service_id", mealServiceIds);
 
@@ -72,6 +74,7 @@ export async function getMealReportData(
     menu_nombre: row.hostal_menus?.nombre || "Desconocido",
     precio: row.precio_snapshot || null,
     eleccion: row.eleccion || null,
+    estado_servicio: row.estado_servicio || "activo",
   }));
 }
 

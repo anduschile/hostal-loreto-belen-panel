@@ -32,6 +32,7 @@ export async function GET(req: Request) {
       Empresa: row.company_name || "Particular",
       "Tipo Servicio": row.tipo_servicio,
       "Menú Servido": row.eleccion ? row.menu_nombre : "Sin respuesta",
+      "Estado Servicio": row.estado_servicio === "anulado" ? "Anulado" : "Activo",
       Precio: row.precio !== null ? row.precio : "Pendiente de confirmar",
     }));
 

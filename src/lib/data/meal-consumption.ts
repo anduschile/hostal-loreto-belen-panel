@@ -95,6 +95,7 @@ export async function updateMealConsumption(
     precio_snapshot?: number | null;
     menu_servido_id?: number | null;
     notas?: string | null;
+    estado_servicio?: "activo" | "anulado";
   }
 ): Promise<MealConsumption> {
   const client = await createClient();
@@ -106,6 +107,7 @@ export async function updateMealConsumption(
   if (input.precio_snapshot !== undefined) payload.precio_snapshot = input.precio_snapshot;
   if (input.menu_servido_id !== undefined) payload.menu_servido_id = input.menu_servido_id;
   if (input.notas !== undefined) payload.notas = input.notas;
+  if (input.estado_servicio !== undefined) payload.estado_servicio = input.estado_servicio;
 
   payload.updated_at = new Date().toISOString();
 

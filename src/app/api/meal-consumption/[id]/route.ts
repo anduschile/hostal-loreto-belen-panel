@@ -71,6 +71,11 @@ export async function PUT(
       }
     }
 
+    // Handle estado_servicio updates (toggle between activo and anulado)
+    if (body.estado_servicio === "activo" || body.estado_servicio === "anulado") {
+      // estado_servicio is allowed, passes through to updateMealConsumption
+    }
+
     const updated = await updateMealConsumption(consumptionId, body);
 
     return NextResponse.json({ ok: true, data: updated });
