@@ -65,9 +65,10 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("[menus DELETE] Error:", { message: e.message, code: e.code, details: e.details });
     return NextResponse.json(
       { ok: false, error: e.message },
-      { status: 500 }
+      { status: 400 }
     );
   }
 }

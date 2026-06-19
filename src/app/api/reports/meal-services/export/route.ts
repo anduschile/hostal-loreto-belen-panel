@@ -76,7 +76,6 @@ export async function GET(req: Request) {
       { header: "HUÉSPED", key: "huesped", width: 25 },
       { header: "EMPRESA", key: "empresa", width: 20 },
       { header: "TIPO SERVICIO", key: "tipo_servicio", width: 15 },
-      { header: "TIPO PRECIO", key: "tipo_precio", width: 13 },
       { header: "MENÚ SERVIDO", key: "menu_servido", width: 30 },
       { header: "PRECIO NETO", key: "precio_neto", width: 15 },
       { header: "PRECIO CON IVA", key: "precio_con_iva", width: 16 },
@@ -106,7 +105,6 @@ export async function GET(req: Request) {
         huesped: row.guest_full_name,
         empresa: row.company_name || "Particular",
         tipo_servicio: row.tipo_servicio.charAt(0).toUpperCase() + row.tipo_servicio.slice(1),
-        tipo_precio: row.tipo_precio || "Preferencial",
         menu_servido: row.eleccion ? row.menu_nombre : "Sin respuesta",
         precio_neto: row.precio !== null ? row.precio : "Pendiente",
         precio_con_iva: row.precio_con_iva !== null ? row.precio_con_iva : "Pendiente",
@@ -118,7 +116,6 @@ export async function GET(req: Request) {
         "left",   // HUÉSPED
         "left",   // EMPRESA
         "center", // TIPO SERVICIO
-        "center", // TIPO PRECIO
         "left",   // MENÚ SERVIDO
         "center", // PRECIO NETO
         "center", // PRECIO CON IVA
@@ -139,9 +136,9 @@ export async function GET(req: Request) {
         applyBorderStyle(cell);
 
         // Apply number format for price columns (neto and con IVA)
-        if ((colNum === 7 || colNum === 8) && typeof cell.value === "number") {
+        if ((colNum === 6 || colNum === 7) && typeof cell.value === "number") {
           cell.numFmt = '"$"#,##0';
-        } else if ((colNum === 7 || colNum === 8) && cell.value === "Pendiente") {
+        } else if ((colNum === 6 || colNum === 7) && cell.value === "Pendiente") {
           cell.font = { italic: true, color: { argb: "FF808080" } };
         }
       });
@@ -154,7 +151,6 @@ export async function GET(req: Request) {
       huesped: "",
       empresa: "",
       tipo_servicio: "",
-      tipo_precio: "",
       menu_servido: "TOTAL:",
       precio_neto: totalPriceNeto,
       precio_con_iva: totalPriceConIva,
@@ -170,14 +166,14 @@ export async function GET(req: Request) {
       applyBorderStyle(cell);
 
       // Align TOTAL label to right
-      if (colNum === 6) {
+      if (colNum === 5) {
         cell.alignment = { horizontal: "right" };
-      } else if (colNum === 7 || colNum === 8) {
+      } else if (colNum === 6 || colNum === 7) {
         cell.alignment = { horizontal: "center" };
       }
 
       // Apply currency format to price columns
-      if ((colNum === 7 || colNum === 8) && typeof cell.value === "number") {
+      if ((colNum === 6 || colNum === 7) && typeof cell.value === "number") {
         cell.numFmt = '"$"#,##0';
       }
     });
@@ -202,7 +198,6 @@ export async function GET(req: Request) {
         huesped: "",
         empresa: summaryRow.label,
         tipo_servicio: "",
-        tipo_precio: "",
         menu_servido: "",
         precio_neto: summaryRow.value,
         precio_con_iva: "",
@@ -215,7 +210,7 @@ export async function GET(req: Request) {
           cell.alignment = { horizontal: "left" };
         }
         // Format price columns
-        else if (colNum === 7 && typeof cell.value === "number") {
+        else if (colNum === 6 && typeof cell.value === "number") {
           cell.alignment = { horizontal: "center" };
           if (!summaryRow.isNumeric) {
             cell.numFmt = '"$"#,##0';

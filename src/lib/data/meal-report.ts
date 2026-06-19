@@ -9,8 +9,6 @@ export interface MealReportRow {
   precio: number | null;
   precio_con_iva: number | null;
   eleccion: "A" | "B" | null;
-  estado_servicio: "activo" | "anulado";
-  tipo_precio?: string;
 }
 
 export interface MealReportSummary {
@@ -62,8 +60,7 @@ export async function getMealReportData(
       hostal_companies(name),
       hostal_menus(nombre),
       precio_snapshot,
-      eleccion,
-      estado_servicio
+      eleccion
     `)
     .in("meal_service_id", mealServiceIds);
 
@@ -87,7 +84,6 @@ export async function getMealReportData(
       precio,
       precio_con_iva,
       eleccion: row.eleccion || null,
-      estado_servicio: row.estado_servicio || "activo",
     };
   });
 }

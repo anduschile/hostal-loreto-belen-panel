@@ -30,6 +30,9 @@ export default function MenusPage() {
       fetchMenus();
     } else {
       fetchMealServices();
+      if (menus.length === 0) {
+        fetchMenus();
+      }
     }
   }, [activeTab]);
 
@@ -96,7 +99,10 @@ export default function MenusPage() {
 
     try {
       const res = await fetch(`/api/menus/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete menu");
+      if (!res.ok) {
+        const { error } = await res.json();
+        throw new Error(error || "Failed to delete menu");
+      }
 
       toast.success("Menú eliminado");
       await fetchMenus();
@@ -315,11 +321,10 @@ export default function MenusPage() {
                         {service.tipo_servicio}
                       </td>
                       <td className="border px-4 py-2">
-                        {/* We need to fetch menu names - for now just show IDs */}
-                        Menú {service.menu_a_id}
+                        {menus.find(m => m.id === service.menu_a_id)?.nombre || `Menú ${service.menu_a_id}`}
                       </td>
                       <td className="border px-4 py-2">
-                        Menú {service.menu_b_id}
+                        {menus.find(m => m.id === service.menu_b_id)?.nombre || `Menú ${service.menu_b_id}`}
                       </td>
                       <td className="border px-4 py-2 text-center space-x-2">
                         <a

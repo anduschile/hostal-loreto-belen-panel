@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMealConsumptionById, updateMealConsumption } from "@/lib/data/meal-consumption";
+import { getMealConsumptionById, updateMealConsumption, deleteMealConsumption } from "@/lib/data/meal-consumption";
 import { getMealServiceById } from "@/lib/data/meal-services";
 import { getPriceForMenu } from "@/lib/data/menu-prices";
 import { createClient } from "@/lib/supabase/server";
@@ -86,11 +86,6 @@ export async function PUT(
       }
     }
 
-    // Handle estado_servicio updates (toggle between activo and anulado)
-    if (body.estado_servicio === "activo" || body.estado_servicio === "anulado") {
-      // estado_servicio is allowed, passes through to updateMealConsumption
-    }
-
     const updated = await updateMealConsumption(consumptionId, body);
 
     return NextResponse.json({ ok: true, data: updated });
@@ -99,6 +94,37 @@ export async function PUT(
       message: e.message,
       code: e.code,
       details: e.details,
+    });
+    return NextResponse.json(
+      { ok: false, error: e.message },
+      { status: 400 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const consumptionId = parseInt(id, 10);
+
+    const consumption = await getMealConsumptionById(consumptionId);
+    if (!consumption) {
+      return NextResponse.json(
+        { ok: false, error: "Meal consumption not found" },
+        { status: 404 }
+      );
+    }
+
+    await deleteMealConsumption(consumptionId);
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    console.error("[meal-consumption DELETE] Error:", {
+      message: e.message,
+      code: e.code,
     });
     return NextResponse.json(
       { ok: false, error: e.message },

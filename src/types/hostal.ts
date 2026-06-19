@@ -286,7 +286,6 @@ export interface MealConsumption {
   company_id?: number | null;
   eleccion?: MealChoiceType | null;
   estado_whatsapp: MealWhatsappStatus;
-  estado_servicio: "activo" | "anulado";
   whatsapp_enviado_at?: string | null;
   precio_snapshot?: number | null;
   menu_servido_id?: number | null;
@@ -302,7 +301,6 @@ export interface MealConsumptionInsert {
   company_id?: number | null;
   eleccion?: MealChoiceType | null;
   estado_whatsapp?: MealWhatsappStatus;
-  estado_servicio?: "activo" | "anulado";
   whatsapp_enviado_at?: string | null;
   precio_snapshot?: number | null;
   menu_servido_id?: number | null;

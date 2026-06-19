@@ -34,7 +34,7 @@ export default function MealConsumptionTable({
   const [selectedConsumption, setSelectedConsumption] = useState<ConsumptionWithGuestAndCompany | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
-  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [removingId, setRemovingId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -163,41 +163,36 @@ export default function MealConsumptionTable({
     }
   };
 
-  const handleToggleAnulado = async (consumptionId: number, currentEstado: string) => {
-    const newEstado = currentEstado === "activo" ? "anulado" : "activo";
-    const mensaje = newEstado === "anulado"
-      ? "¿Confirmas que este servicio se anula? El registro se mantendrá para fines de facturación."
-      : "¿Reactivar este servicio?";
+  const handleRemoveFromService = async (consumptionId: number, guestName: string) => {
+    const mensaje = `¿Confirmas eliminar a ${guestName} de este servicio? Esta acción no se puede deshacer y no quedará registro.`;
 
     if (!confirm(mensaje)) return;
 
     try {
-      setTogglingId(consumptionId);
+      setRemovingId(consumptionId);
       const res = await fetch(`/api/meal-consumption/${consumptionId}`, {
-        method: "PUT",
+        method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estado_servicio: newEstado }),
       });
 
-      if (!res.ok) throw new Error("Failed to update");
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete");
+      }
 
       await fetchData();
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setTogglingId(null);
+      setRemovingId(null);
     }
   };
 
-  const activeConsumptions = consumptions.filter((c) => c.estado_servicio === "activo");
-  const cancelledConsumptions = consumptions.filter((c) => c.estado_servicio === "anulado");
-
   const stats = {
-    total: activeConsumptions.length,
-    chosenA: activeConsumptions.filter((c) => c.eleccion === "A").length,
-    chosenB: activeConsumptions.filter((c) => c.eleccion === "B").length,
-    pending: activeConsumptions.filter((c) => !c.eleccion).length,
-    cancelled: cancelledConsumptions.length,
+    total: consumptions.length,
+    chosenA: consumptions.filter((c) => c.eleccion === "A").length,
+    chosenB: consumptions.filter((c) => c.eleccion === "B").length,
+    pending: consumptions.filter((c) => !c.eleccion).length,
   };
 
   if (loading) return <div className="text-sm text-gray-500">Cargando...</div>;
@@ -211,7 +206,7 @@ export default function MealConsumptionTable({
       )}
 
       <div className="space-y-3">
-        <div className="grid grid-cols-5 gap-4 p-4 bg-emerald-50 rounded-lg">
+        <div className="grid grid-cols-4 gap-4 p-4 bg-emerald-50 rounded-lg">
           <div>
             <div className="text-2xl font-bold text-emerald-600">{stats.total}</div>
             <div className="text-xs text-gray-600">Total huéspedes</div>
@@ -227,10 +222,6 @@ export default function MealConsumptionTable({
           <div>
             <div className="text-2xl font-bold text-orange-600">{stats.pending}</div>
             <div className="text-xs text-gray-600">Sin respuesta</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
-            <div className="text-xs text-gray-600">Anulados</div>
           </div>
         </div>
 
@@ -263,142 +254,103 @@ export default function MealConsumptionTable({
             </tr>
           </thead>
           <tbody>
-            {consumptions.map((consumption) => {
-              const isAnulado = consumption.estado_servicio === "anulado";
-              return (
-                <tr
-                  key={consumption.id}
-                  className={`${
-                    isAnulado
-                      ? "bg-gray-100 text-gray-600 hover:bg-gray-150"
-                      : "hover:bg-gray-50"
-                  }`}
-                >
-                  <td className="border px-4 py-2">
-                    <div className={`${isAnulado ? "font-normal" : "font-medium"}`}>
-                      {consumption.guest_full_name}
-                    </div>
-                    {consumption.guest_phone && (
-                      <div className="text-xs text-gray-500">{consumption.guest_phone}</div>
-                    )}
-                    {isAnulado && (
-                      <div className="text-xs font-semibold text-red-600 mt-1">Anulado</div>
-                    )}
-                  </td>
-                  <td className="border px-4 py-2 text-sm">
-                    {consumption.company_name || "Particular"}
-                  </td>
-                  <td className="border px-4 py-2 text-xs text-center">
-                    <span
-                      className={`px-2 py-1 rounded ${
-                        isAnulado
-                          ? "bg-gray-200 text-gray-600"
-                          : consumption.estado_whatsapp === "enviado"
-                          ? "bg-green-100 text-green-700"
-                          : consumption.estado_whatsapp === "respondido"
-                          ? "bg-blue-100 text-blue-700"
-                          : consumption.estado_whatsapp === "sin_respuesta"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {consumption.estado_whatsapp}
+            {consumptions.map((consumption) => (
+              <tr key={consumption.id} className="hover:bg-gray-50">
+                <td className="border px-4 py-2">
+                  <div className="font-medium">
+                    {consumption.guest_full_name}
+                  </div>
+                  {consumption.guest_phone && (
+                    <div className="text-xs text-gray-500">{consumption.guest_phone}</div>
+                  )}
+                </td>
+                <td className="border px-4 py-2 text-sm">
+                  {consumption.company_name || "Particular"}
+                </td>
+                <td className="border px-4 py-2 text-xs text-center">
+                  <span
+                    className={`px-2 py-1 rounded ${
+                      consumption.estado_whatsapp === "enviado"
+                        ? "bg-green-100 text-green-700"
+                        : consumption.estado_whatsapp === "respondido"
+                        ? "bg-blue-100 text-blue-700"
+                        : consumption.estado_whatsapp === "sin_respuesta"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {consumption.estado_whatsapp}
+                  </span>
+                </td>
+                <td className="border px-4 py-2 text-sm">
+                  {consumption.eleccion ? (
+                    <span className="font-bold text-emerald-600">
+                      Opción {consumption.eleccion}
                     </span>
-                  </td>
-                  <td className="border px-4 py-2 text-sm">
-                    {consumption.eleccion ? (
-                      <span className={`font-bold ${isAnulado ? "text-gray-600" : "text-emerald-600"}`}>
-                        Opción {consumption.eleccion}
-                      </span>
-                    ) : (
-                      <span className={isAnulado ? "text-gray-500" : "text-gray-500"}>-</span>
-                    )}
-                    {consumption.precio_snapshot && (
-                      <div className={`text-xs ${isAnulado ? "text-gray-500" : "text-gray-600"}`}>
-                        ${consumption.precio_snapshot.toFixed(2)}
-                      </div>
-                    )}
-                  </td>
-                  <td className="border px-4 py-2 text-center space-x-1">
-                    <button
-                      onClick={() => handleUpdateChoice(consumption.id, "A")}
-                      disabled={isAnulado}
-                      className={`px-2 py-1 rounded text-xs font-bold transition ${
-                        isAnulado
-                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                          : consumption.eleccion === "A"
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-200 hover:bg-blue-200"
-                      }`}
-                    >
-                      A
-                    </button>
-                    <button
-                      onClick={() => handleUpdateChoice(consumption.id, "B")}
-                      disabled={isAnulado}
-                      className={`px-2 py-1 rounded text-xs font-bold transition ${
-                        isAnulado
-                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                          : consumption.eleccion === "B"
-                          ? "bg-purple-600 text-white"
-                          : "bg-gray-200 hover:bg-purple-200"
-                      }`}
-                    >
-                      B
-                    </button>
-                  </td>
-                  <td className="border px-4 py-2 text-xs space-x-1 space-y-1">
-                    <button
-                      onClick={() => {
-                        setSelectedConsumption(consumption);
-                        setWhatsappModalOpen(true);
-                      }}
-                      disabled={isAnulado}
-                      className={`block w-full px-2 py-1 rounded transition ${
-                        isAnulado
-                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : "bg-green-600 text-white hover:bg-green-700"
-                      }`}
-                    >
-                      WhatsApp
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleUpdateStatus(consumption.id, "sin_respuesta")
-                      }
-                      disabled={isAnulado}
-                      className={`block w-full px-2 py-1 rounded transition ${
-                        isAnulado
-                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : "bg-gray-600 text-white hover:bg-gray-700"
-                      }`}
-                    >
-                      Sin respuesta
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleToggleAnulado(
-                          consumption.id,
-                          consumption.estado_servicio
-                        )
-                      }
-                      disabled={togglingId === consumption.id}
-                      className={`block w-full px-2 py-1 rounded transition text-xs font-medium ${
-                        isAnulado
-                          ? "bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
-                          : "bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-                      }`}
-                    >
-                      {togglingId === consumption.id
-                        ? "Procesando..."
-                        : isAnulado
-                        ? "Reactivar"
-                        : "Anular"}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+                  ) : (
+                    <span className="text-gray-500">-</span>
+                  )}
+                  {consumption.precio_snapshot && (
+                    <div className="text-xs text-gray-600">
+                      ${consumption.precio_snapshot.toFixed(2)}
+                    </div>
+                  )}
+                </td>
+                <td className="border px-4 py-2 text-center space-x-1">
+                  <button
+                    onClick={() => handleUpdateChoice(consumption.id, "A")}
+                    className={`px-2 py-1 rounded text-xs font-bold transition ${
+                      consumption.eleccion === "A"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 hover:bg-blue-200"
+                    }`}
+                  >
+                    A
+                  </button>
+                  <button
+                    onClick={() => handleUpdateChoice(consumption.id, "B")}
+                    className={`px-2 py-1 rounded text-xs font-bold transition ${
+                      consumption.eleccion === "B"
+                        ? "bg-purple-600 text-white"
+                        : "bg-gray-200 hover:bg-purple-200"
+                    }`}
+                  >
+                    B
+                  </button>
+                </td>
+                <td className="border px-4 py-2 text-xs space-x-1 space-y-1">
+                  <button
+                    onClick={() => {
+                      setSelectedConsumption(consumption);
+                      setWhatsappModalOpen(true);
+                    }}
+                    className="block w-full px-2 py-1 rounded transition bg-green-600 text-white hover:bg-green-700"
+                  >
+                    WhatsApp
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleUpdateStatus(consumption.id, "sin_respuesta")
+                    }
+                    className="block w-full px-2 py-1 rounded transition bg-gray-600 text-white hover:bg-gray-700"
+                  >
+                    Sin respuesta
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleRemoveFromService(
+                        consumption.id,
+                        consumption.guest_full_name
+                      )
+                    }
+                    disabled={removingId === consumption.id}
+                    className="block w-full px-2 py-1 rounded transition text-xs font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {removingId === consumption.id ? "Eliminando..." : "Quitar"}
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
