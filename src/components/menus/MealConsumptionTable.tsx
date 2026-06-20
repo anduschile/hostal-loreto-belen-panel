@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MealConsumption, Guest, Company } from "@/types/hostal";
 import WhatsappPreviewModal from "./WhatsappPreviewModal";
+import AddManualGuestModal from "./AddManualGuestModal";
 
 interface Props {
   serviceId: number;
@@ -35,6 +36,7 @@ export default function MealConsumptionTable({
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [removingId, setRemovingId] = useState<number | null>(null);
+  const [addManualGuestModalOpen, setAddManualGuestModalOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -233,6 +235,12 @@ export default function MealConsumptionTable({
           >
             {syncLoading ? "Sincronizando..." : "🔄 Sincronizar huéspedes"}
           </button>
+          <button
+            onClick={() => setAddManualGuestModalOpen(true)}
+            className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm font-medium"
+          >
+            ➕ Agregar huésped manual
+          </button>
           {syncMessage && (
             <div className="text-sm text-cyan-700 font-medium">
               {syncMessage}
@@ -370,6 +378,13 @@ export default function MealConsumptionTable({
           onSent={fetchData}
         />
       )}
+
+      <AddManualGuestModal
+        open={addManualGuestModalOpen}
+        onClose={() => setAddManualGuestModalOpen(false)}
+        serviceId={serviceId}
+        onSuccess={fetchData}
+      />
     </div>
   );
 }

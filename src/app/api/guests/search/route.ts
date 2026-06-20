@@ -18,7 +18,7 @@ export async function GET(req: Request) {
         // We limit to 15 results for performance
         const { data, error } = await supabase
             .from("hostal_guests")
-            .select("id, full_name, document_id, email")
+            .select("id, full_name, document_id, email, phone")
             .or(`full_name.ilike.%${queryText}%,document_id.ilike.%${queryText}%`)
             .limit(15);
 
