@@ -292,9 +292,9 @@ export default function MealConsumptionTable({
                 </td>
                 <td className="border px-4 py-2 text-sm">
                   {consumption.eleccion ? (
-                    <span className="font-bold text-emerald-600">
-                      Opción {consumption.eleccion}
-                    </span>
+                    <div className="font-bold text-emerald-600">
+                      {consumption.eleccion}: {consumption.eleccion === "A" ? menuAName : menuBName}
+                    </div>
                   ) : (
                     <span className="text-gray-500">-</span>
                   )}

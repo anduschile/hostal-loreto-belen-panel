@@ -122,17 +122,17 @@ export default function WhatsappPreviewModal({
             Tenemos dos alternativas:
             <br />
             <br />
-            <strong>Opción 1:</strong> {menuAName}
+            <strong>Opción A:</strong> {menuAName}
             <br />
             {menuA?.descripcion && `${menuA.descripcion}\n`}
             {menuA?.foto_url && `[Foto: ${menuA.foto_url}]\n`}
             <br />
-            <strong>Opción 2:</strong> {menuBName}
+            <strong>Opción B:</strong> {menuBName}
             <br />
             {menuB?.descripcion && `${menuB.descripcion}\n`}
             {menuB?.foto_url && `[Foto: ${menuB.foto_url}]\n`}
             <br />
-            Respóndenos con <strong>1</strong> o <strong>2</strong> para tener tu
+            Respóndenos con <strong>A</strong> o <strong>B</strong> para tener tu
             plato listo cuando llegues.
             <br />
             <br />

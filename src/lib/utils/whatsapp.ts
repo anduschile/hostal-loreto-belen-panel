@@ -53,7 +53,7 @@ export function buildWhatsappMessage(params: WhatsappMessageParams): WhatsappMes
   mensaje += `Te saluda Hostal Loreto Belén. Te esperamos el ${fechaLegible} para tu ${tipoServicioLabel}.\n\n`;
   mensaje += `Tenemos dos alternativas:\n\n`;
 
-  mensaje += `*Opción 1:* ${params.menuANombre}\n`;
+  mensaje += `*Opción A:* ${params.menuANombre}\n`;
   if (params.menuADescripcion) {
     mensaje += `${params.menuADescripcion}\n`;
   }
@@ -62,7 +62,7 @@ export function buildWhatsappMessage(params: WhatsappMessageParams): WhatsappMes
   }
   mensaje += `\n`;
 
-  mensaje += `*Opción 2:* ${params.menuBNombre}\n`;
+  mensaje += `*Opción B:* ${params.menuBNombre}\n`;
   if (params.menuBDescripcion) {
     mensaje += `${params.menuBDescripcion}\n`;
   }
@@ -71,7 +71,7 @@ export function buildWhatsappMessage(params: WhatsappMessageParams): WhatsappMes
   }
   mensaje += `\n`;
 
-  mensaje += `Respóndenos con *1* o *2* para tener tu plato listo cuando llegues.\n\n`;
+  mensaje += `Respóndenos con *A* o *B* para tener tu plato listo cuando llegues.\n\n`;
   mensaje += `⏰ *Plazo máximo para confirmar tu elección: el día anterior a tu llegada antes de las 20:00 hrs.*\n`;
   mensaje += `Si no confirmas antes del plazo, el hostal te asignará una de las opciones disponibles.\n\n`;
   mensaje += `Saludos`;
