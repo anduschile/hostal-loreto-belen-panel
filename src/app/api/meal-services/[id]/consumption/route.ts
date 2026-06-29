@@ -86,7 +86,7 @@ export async function POST(
 
       const { data: reservations, error } = await supabase
         .from("hostal_reservations")
-        .select("id, guest_id, company_id, status")
+        .select("id, guest_id, company_id, status, check_in, check_out")
         .lte("check_in", fecha)
         .gte("check_out", fecha)
         .in("status", ["confirmed", "checked_in"]);
