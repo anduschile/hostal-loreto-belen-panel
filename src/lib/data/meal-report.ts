@@ -58,7 +58,7 @@ export async function getMealReportData(
       hostal_meal_services(fecha, tipo_servicio),
       hostal_guests(full_name),
       hostal_companies(name),
-      hostal_menus(nombre),
+      hostal_menus!menu_servido_id(nombre),
       precio_snapshot,
       eleccion
     `)
