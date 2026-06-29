@@ -1,0 +1,292 @@
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import * as fs from "fs";
+import * as path from "path";
+
+async function resync() {
+  console.log("=".repeat(100));
+  console.log("RESYNC CON FIX V2: Manejo mejorado de deduplicación");
+  console.log("=".repeat(100));
+
+  try {
+    // Read .env.local
+    const envPath = path.join(process.cwd(), ".env.local");
+    const envContent = fs.readFileSync(envPath, "utf-8");
+    const env: Record<string, string> = {};
+    envContent.split("\n").forEach((line) => {
+      const [key, ...valueParts] = line.split("=");
+      if (key && valueParts.length > 0) {
+        let value = valueParts.join("=").trim();
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
+        env[key.trim()] = value;
+      }
+    });
+
+    const url = env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = env.SUPABASE_SERVICE_ROLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!url || !key) {
+      throw new Error("Faltan credenciales de Supabase en .env.local");
+    }
+
+    const supabase = createSupabaseClient(url, key);
+
+    const targetDate = "2026-06-29";
+    const serviceIds = [21, 30];
+    const serviceToProtect = 20;
+
+    // ========================================
+    // PASO 1: CAPTURAR ESTADO ANTES
+    // ========================================
+    console.log("\n[PASO 1] CAPTURANDO ESTADO ANTES DEL RESYNC");
+    console.log("-".repeat(100));
+
+    const beforeState: { [serviceId: number]: number } = {};
+
+    for (const svcId of serviceIds) {
+      const { data } = await supabase
+        .from("hostal_meal_consumption")
+        .select("id, guest_id, hostal_guests(full_name)")
+        .eq("meal_service_id", svcId);
+
+      beforeState[svcId] = data?.length || 0;
+      console.log(`Servicio ${svcId}: ${data?.length || 0} registros ANTES`);
+    }
+
+    // Capture service 20 for protection verification
+    const { data: service20Before } = await supabase
+      .from("hostal_meal_consumption")
+      .select("id, guest_id")
+      .eq("meal_service_id", serviceToProtect);
+
+    const service20BeforeIds = new Set((service20Before || []).map((c: any) => c.id));
+    console.log(`Servicio 20 (CONTROL): ${service20Before?.length || 0} registros a proteger`);
+
+    // ========================================
+    // PASO 2: OBTENER RESERVAS CON companions_json
+    // ========================================
+    console.log("\n" + "-".repeat(100));
+    console.log("[PASO 2] OBTENIENDO RESERVAS CON companions_json");
+    console.log("-".repeat(100));
+
+    const { data: reservations } = await supabase
+      .from("hostal_reservations")
+      .select("id, guest_id, company_id, check_in, check_out, companions_json, hostal_guests(full_name)")
+      .lte("check_in", targetDate)
+      .gte("check_out", targetDate)
+      .in("status", ["confirmed", "checked_in"]);
+
+    console.log(`Total de reservas activas: ${reservations?.length || 0}`);
+
+    // ========================================
+    // PASO 3: DEDUPLICACIÓN CORRECTA
+    // ========================================
+    console.log("\n" + "-".repeat(100));
+    console.log("[PASO 3] DEDUPLICACIÓN POR guest_id (USANDO LÓGICA DEL CÓDIGO)");
+    console.log("-".repeat(100));
+
+    interface Reservation {
+      id: number;
+      guest_id: number;
+      company_id: number | null;
+      check_in: string;
+      check_out: string;
+      companions_json: any[] | null;
+      hostal_guests: { full_name: string } | null;
+    }
+
+    const byGuest: { [guestId: number]: Reservation[] } = {};
+
+    (reservations || []).forEach((r: any) => {
+      if (!byGuest[r.guest_id]) byGuest[r.guest_id] = [];
+      byGuest[r.guest_id].push(r);
+    });
+
+    const deduplicatedReservations: Reservation[] = [];
+
+    Object.entries(byGuest).forEach(([guestId, reservs]) => {
+      if (reservs.length === 1) {
+        deduplicatedReservations.push(reservs[0]);
+      } else {
+        // Multiple reservations for same guest - keep the one with most recent check_in
+        const sorted = [...reservs].sort((a, b) => b.check_in.localeCompare(a.check_in));
+        deduplicatedReservations.push(sorted[0]);
+        console.log(`  Deduplicado guest ${guestId}: ${reservs.length} reservas → 1 seleccionada (check_in: ${sorted[0].check_in})`);
+      }
+    });
+
+    console.log(`\nDeduplicated: ${deduplicatedReservations.length} reservas únicas`);
+
+    // ========================================
+    // PASO 4: EXPANDIR A CONSUMPTIONS (SIN DUPLICADOS EN LA LISTA)
+    // ========================================
+    console.log("\n" + "-".repeat(100));
+    console.log("[PASO 4] EXPANDIENDO A CONSUMPTIONS CON ACOMPAÑANTES");
+    console.log("-".repeat(100));
+
+    // Use a Set to track which guest_ids we've already added
+    const consumptionsPerGuest: { [guestId: number]: any } = {};
+    const companionDetails: { [guestId: number]: string } = {};
+
+    deduplicatedReservations.forEach((reservation: any) => {
+      const titularGuestId = reservation.guest_id;
+
+      // Add titular if not already present
+      if (!consumptionsPerGuest[titularGuestId]) {
+        consumptionsPerGuest[titularGuestId] = {
+          guest_id: titularGuestId,
+          reservation_id: reservation.id,
+          company_id: reservation.company_id || null,
+          eleccion: null,
+          estado_whatsapp: "pendiente",
+        };
+        companionDetails[titularGuestId] = `[TITULAR] ${reservation.hostal_guests?.full_name || `guest_id ${titularGuestId}`}`;
+      }
+
+      // Add companions
+      const companions = reservation.companions_json || [];
+      (Array.isArray(companions) ? companions : []).forEach((companion: any) => {
+        const companionGuestId = companion.guest_id;
+
+        // Only add if not already present (avoid duplicates within the list)
+        if (companionGuestId && !consumptionsPerGuest[companionGuestId]) {
+          consumptionsPerGuest[companionGuestId] = {
+            guest_id: companionGuestId,
+            reservation_id: reservation.id,
+            company_id: reservation.company_id || null,
+            eleccion: null,
+            estado_whatsapp: "pendiente",
+          };
+
+          const compName = companion.name || companion.full_name || `guest_id ${companionGuestId}`;
+          companionDetails[companionGuestId] = `[ACOMPAÑANTE] ${compName} (de ${reservation.hostal_guests?.full_name || reservation.guest_id})`;
+        }
+      });
+    });
+
+    // Convert to array
+    const consumptions = Object.values(consumptionsPerGuest);
+
+    console.log(`Total de consumptions (sin duplicados): ${consumptions.length}`);
+    console.log(`\nDetalle:`);
+    Object.entries(companionDetails)
+      .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+      .forEach(([guestId, detail]) => {
+        console.log(`  ${detail}`);
+      });
+
+    // ========================================
+    // PASO 5: SINCRONIZAR SERVICIOS 21 Y 30
+    // ========================================
+    console.log("\n" + "=".repeat(100));
+    console.log("[PASO 5] SINCRONIZANDO SERVICIOS 21 Y 30");
+    console.log("=".repeat(100));
+
+    const afterState: { [serviceId: number]: number } = {};
+
+    for (const svcId of serviceIds) {
+      console.log(`\n▶ Servicio ${svcId}:`);
+
+      // Delete existing consumptions
+      const { error: deleteError } = await supabase
+        .from("hostal_meal_consumption")
+        .delete()
+        .eq("meal_service_id", svcId);
+
+      if (deleteError) {
+        throw new Error(`Failed to delete: ${deleteError.message}`);
+      }
+      console.log(`  ✓ Registros anteriores eliminados`);
+
+      // Insert new consumptions
+      const serviceConsumptions = consumptions.map((c) => ({
+        ...c,
+        meal_service_id: svcId,
+      }));
+
+      const { data: created, error: insertError } = await supabase
+        .from("hostal_meal_consumption")
+        .insert(serviceConsumptions)
+        .select();
+
+      if (insertError) {
+        throw new Error(`Failed to insert: ${insertError.message}`);
+      }
+
+      afterState[svcId] = created?.length || 0;
+      console.log(`  ✓ ${created?.length || 0} nuevos registros cargados`);
+    }
+
+    // ========================================
+    // PASO 6: VERIFICAR ESTADO DESPUÉS
+    // ========================================
+    console.log("\n" + "=".repeat(100));
+    console.log("[PASO 6] VERIFICACIÓN FINAL");
+    console.log("=".repeat(100));
+
+    console.log(`\nResultados post-resync:`);
+    for (const svcId of serviceIds) {
+      const before = beforeState[svcId] || 0;
+      const after = afterState[svcId] || 0;
+      const change = after - before;
+      console.log(`  Servicio ${svcId}: ${before} → ${after} registros (${change > 0 ? "+" : ""}${change})`);
+    }
+
+    // ========================================
+    // PASO 7: VERIFICAR SERVICIO 20 INTACTO
+    // ========================================
+    console.log("\n" + "-".repeat(100));
+    console.log("Protección - Servicio 20:");
+
+    const { data: service20After } = await supabase
+      .from("hostal_meal_consumption")
+      .select("id, guest_id")
+      .eq("meal_service_id", serviceToProtect);
+
+    const service20AfterIds = new Set((service20After || []).map((c: any) => c.id));
+
+    console.log(`  Registros ANTES: ${service20BeforeIds.size}`);
+    console.log(`  Registros DESPUÉS: ${service20AfterIds.size}`);
+
+    // Check if IDs are identical
+    let identical = service20BeforeIds.size === service20AfterIds.size;
+    if (identical) {
+      service20BeforeIds.forEach((id) => {
+        if (!service20AfterIds.has(id)) identical = false;
+      });
+    }
+
+    console.log(`  Estado: ${identical ? "✅ INTACTO" : "⚠️ ALTERADO"}`);
+
+    // ========================================
+    // RESUMEN
+    // ========================================
+    console.log("\n" + "=".repeat(100));
+    console.log("RESUMEN");
+    console.log("=".repeat(100));
+
+    const total21 = afterState[21] || 0;
+    const total30 = afterState[30] || 0;
+
+    console.log(`\n📊 Resultados:`);
+    console.log(`  Esperado: 22 personas (15 titulares + 7 acompañantes)`);
+    console.log(`\n  Servicio 21: ${total21} registros ${total21 === 22 ? "✅" : `⚠️ (esperaba 22)`}`);
+    console.log(`  Servicio 30: ${total30} registros ${total30 === 22 ? "✅" : `⚠️ (esperaba 22)`}`);
+    console.log(`  Servicio 20: ✅ PROTEGIDO (${service20AfterIds.size} registros)`);
+
+    if (total21 === 22 && total30 === 22 && identical) {
+      console.log(`\n✅ RESYNC EXITOSO`);
+      process.exit(0);
+    } else {
+      console.log(`\n⚠️ RESYNC COMPLETADO PERO CON DIFERENCIAS`);
+      process.exit(1);
+    }
+
+  } catch (err) {
+    console.error("\n❌ ERROR:", err);
+    process.exit(1);
+  }
+}
+
+resync();

@@ -1,0 +1,269 @@
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import * as fs from "fs";
+import * as path from "path";
+
+async function resync() {
+  console.log("=".repeat(100));
+  console.log("RESYNC CON FIX: Verifica antes/después e implementa el cambio");
+  console.log("=".repeat(100));
+
+  try {
+    // Read .env.local
+    const envPath = path.join(process.cwd(), ".env.local");
+    const envContent = fs.readFileSync(envPath, "utf-8");
+    const env: Record<string, string> = {};
+    envContent.split("\n").forEach((line) => {
+      const [key, ...valueParts] = line.split("=");
+      if (key && valueParts.length > 0) {
+        let value = valueParts.join("=").trim();
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
+        env[key.trim()] = value;
+      }
+    });
+
+    const url = env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = env.SUPABASE_SERVICE_ROLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!url || !key) {
+      throw new Error("Faltan credenciales de Supabase en .env.local");
+    }
+
+    const supabase = createSupabaseClient(url, key);
+
+    const targetDate = "2026-06-29";
+    const serviceIds = [21, 30];
+    const serviceToProtect = 20;
+
+    // ========================================
+    // PASO 1: CAPTURAR ESTADO ANTES
+    // ========================================
+    console.log("\n[PASO 1] CAPTURANDO ESTADO ANTES DEL RESYNC");
+    console.log("-".repeat(100));
+
+    const beforeState: { [serviceId: number]: { id: number; guest_id: number }[] } = {};
+
+    for (const svcId of serviceIds) {
+      const { data } = await supabase
+        .from("hostal_meal_consumption")
+        .select("id, guest_id, hostal_guests(full_name)")
+        .eq("meal_service_id", svcId);
+
+      beforeState[svcId] = data || [];
+      console.log(`Servicio ${svcId}: ${data?.length || 0} registros`);
+      if (data && data.length > 0) {
+        data.forEach((c: any) => {
+          console.log(`  - ${c.hostal_guests?.full_name || `(guest_id ${c.guest_id})`}`);
+        });
+      }
+    }
+
+    // Capture service 20 for protection verification
+    const { data: service20Before } = await supabase
+      .from("hostal_meal_consumption")
+      .select("id, guest_id")
+      .eq("meal_service_id", serviceToProtect);
+
+    const service20BeforeIds = new Set((service20Before || []).map((c: any) => c.id));
+    console.log(`\nServicio 20 (CONTROL): ${service20Before?.length || 0} registros (IDs a proteger)`);
+
+    // ========================================
+    // PASO 2: OBTENER RESERVAS CON COMPANIONS_JSON
+    // ========================================
+    console.log("\n" + "-".repeat(100));
+    console.log("[PASO 2] OBTENIENDO RESERVAS CON companions_json PARA RESYNC");
+    console.log("-".repeat(100));
+
+    const { data: reservations } = await supabase
+      .from("hostal_reservations")
+      .select("id, guest_id, company_id, check_in, check_out, companions_json, hostal_guests(full_name)")
+      .lte("check_in", targetDate)
+      .gte("check_out", targetDate)
+      .in("status", ["confirmed", "checked_in"]);
+
+    console.log(`Total de reservas activas: ${reservations?.length || 0}`);
+
+    // Deduplicate by guest_id
+    const byGuest: { [guestId: number]: any } = {};
+    (reservations || []).forEach((r: any) => {
+      if (!byGuest[r.guest_id]) {
+        byGuest[r.guest_id] = r;
+      }
+    });
+
+    const deduplicatedReservations = Object.values(byGuest);
+    console.log(`Después de deduplicación: ${deduplicatedReservations.length} reservas únicas`);
+
+    // ========================================
+    // PASO 3: EXPANDIR CONSUMPTIONS CON COMPANIONS
+    // ========================================
+    console.log("\n" + "-".repeat(100));
+    console.log("[PASO 3] EXPANDIENDO CONSUMPTIONS CON ACOMPAÑANTES");
+    console.log("-".repeat(100));
+
+    const consumptions: any[] = [];
+    const processedGuestIds = new Set<number>();
+
+    deduplicatedReservations.forEach((reservation: any) => {
+      // Add titular
+      consumptions.push({
+        meal_service_id: null, // Will set separately for each service
+        guest_id: reservation.guest_id,
+        reservation_id: reservation.id,
+        company_id: reservation.company_id || null,
+        eleccion: null,
+        estado_whatsapp: "pendiente",
+      });
+      processedGuestIds.add(reservation.guest_id);
+
+      console.log(`✓ Titular: ${reservation.hostal_guests?.full_name || `(guest_id ${reservation.guest_id})`}`);
+
+      // Add companions
+      const companions = reservation.companions_json || [];
+      (Array.isArray(companions) ? companions : []).forEach((companion: any) => {
+        if (companion.guest_id && !processedGuestIds.has(companion.guest_id)) {
+          consumptions.push({
+            meal_service_id: null, // Will set separately for each service
+            guest_id: companion.guest_id,
+            reservation_id: reservation.id,
+            company_id: reservation.company_id || null,
+            eleccion: null,
+            estado_whatsapp: "pendiente",
+          });
+          processedGuestIds.add(companion.guest_id);
+
+          const compName = companion.name || companion.full_name || `(guest_id ${companion.guest_id})`;
+          console.log(`  └─ Acompañante: ${compName}`);
+        }
+      });
+    });
+
+    console.log(`\nTotal de consumptions a cargar: ${consumptions.length}`);
+    console.log(`  Titulares únicos: ${deduplicatedReservations.length}`);
+    console.log(`  Acompañantes: ${consumptions.length - deduplicatedReservations.length}`);
+
+    // ========================================
+    // PASO 4: BORRAR REGISTROS ACTUALES Y RECARGAR
+    // ========================================
+    console.log("\n" + "-".repeat(100));
+    console.log("[PASO 4] SINCRONIZANDO SERVICIOS 21 Y 30");
+    console.log("-".repeat(100));
+
+    for (const svcId of serviceIds) {
+      console.log(`\n▶ Procesando servicio ${svcId}...`);
+
+      // Delete existing consumptions for this service
+      const { error: deleteError } = await supabase
+        .from("hostal_meal_consumption")
+        .delete()
+        .eq("meal_service_id", svcId);
+
+      if (deleteError) {
+        throw new Error(`Failed to delete consumption for service ${svcId}: ${deleteError.message}`);
+      }
+      console.log(`  Registros anteriores eliminados`);
+
+      // Insert new consumptions with companions
+      const serviceConsumptions = consumptions.map((c) => ({
+        ...c,
+        meal_service_id: svcId,
+      }));
+
+      const { data: created, error: insertError } = await supabase
+        .from("hostal_meal_consumption")
+        .insert(serviceConsumptions)
+        .select();
+
+      if (insertError) {
+        throw new Error(`Failed to insert consumption for service ${svcId}: ${insertError.message}`);
+      }
+
+      console.log(`  ✓ ${created?.length || 0} nuevos registros cargados`);
+    }
+
+    // ========================================
+    // PASO 5: VERIFICAR ESTADO DESPUÉS
+    // ========================================
+    console.log("\n" + "=".repeat(100));
+    console.log("[PASO 5] VERIFICANDO ESTADO DESPUÉS DEL RESYNC");
+    console.log("=".repeat(100));
+
+    const afterState: { [serviceId: number]: any[] } = {};
+
+    for (const svcId of serviceIds) {
+      const { data } = await supabase
+        .from("hostal_meal_consumption")
+        .select("id, guest_id, hostal_guests(full_name)")
+        .eq("meal_service_id", svcId);
+
+      afterState[svcId] = data || [];
+
+      console.log(`\nServicio ${svcId}:`);
+      console.log(`  Registros después: ${data?.length || 0}`);
+      if (data && data.length > 0) {
+        data.forEach((c: any) => {
+          console.log(`    - ${c.hostal_guests?.full_name || `(guest_id ${c.guest_id})`}`);
+        });
+      }
+    }
+
+    // ========================================
+    // PASO 6: VERIFICAR SERVICIO 20 INTACTO
+    // ========================================
+    console.log("\n" + "=".repeat(100));
+    console.log("[PASO 6] VERIFICANDO PROTECCIÓN: SERVICIO 20");
+    console.log("=".repeat(100));
+
+    const { data: service20After } = await supabase
+      .from("hostal_meal_consumption")
+      .select("id, guest_id")
+      .eq("meal_service_id", serviceToProtect);
+
+    const service20AfterIds = new Set((service20After || []).map((c: any) => c.id));
+
+    console.log(`\nServicio 20 (28-06-2026 - RECONSTRUIDO MANUALMENTE):`);
+    console.log(`  Registros ANTES: ${service20BeforeIds.size}`);
+    console.log(`  Registros DESPUÉS: ${service20AfterIds.size}`);
+
+    // Check if IDs are identical
+    let identical = service20BeforeIds.size === service20AfterIds.size;
+    if (identical) {
+      service20BeforeIds.forEach((id) => {
+        if (!service20AfterIds.has(id)) identical = false;
+      });
+    }
+
+    console.log(`  Estado: ${identical ? "✓ INTACTO (SIN CAMBIOS)" : "✗ ALTERADO"}`);
+
+    // ========================================
+    // RESUMEN FINAL
+    // ========================================
+    console.log("\n" + "=".repeat(100));
+    console.log("RESUMEN FINAL");
+    console.log("=".repeat(100));
+
+    const total21 = afterState[21]?.length || 0;
+    const total30 = afterState[30]?.length || 0;
+
+    console.log(`\n📊 RESULTADOS:`);
+    console.log(`\n  Esperado: 22 personas por servicio (15 titulares + 7 acompañantes)`);
+    console.log(`\n  Servicio 21: ${total21} registros ${total21 === 22 ? "✅" : "⚠️"}`);
+    console.log(`  Servicio 30: ${total30} registros ${total30 === 22 ? "✅" : "⚠️"}`);
+    console.log(`\n  Servicio 20: ${service20AfterIds.size} registros (${identical ? "✅ PROTEGIDO" : "⚠️ ALTERADO"})`);
+
+    if (total21 === 22 && total30 === 22 && identical) {
+      console.log(`\n✅ RESYNC EXITOSO: Fix aplicado correctamente`);
+    } else {
+      console.log(`\n⚠️  RESYNC CON ISSUES - Revisar arriba`);
+    }
+
+    console.log("=".repeat(100));
+
+  } catch (err) {
+    console.error("ERROR:", err);
+    process.exit(1);
+  }
+}
+
+resync();
