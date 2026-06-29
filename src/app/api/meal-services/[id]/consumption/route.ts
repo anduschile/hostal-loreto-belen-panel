@@ -7,11 +7,20 @@ export const dynamic = "force-dynamic";
 // Deduplicate reservations by guest_id, keeping the one with the most recent check_in
 // If a guest has multiple reservations on the same day (e.g., checkout and checkin),
 // we create only one consumption record using the "incoming" reservation (most recent check_in)
+interface ReservationWithCompanions {
+  id: number;
+  guest_id: number;
+  company_id: number | null;
+  check_in: string;
+  check_out: string;
+  companions_json?: Array<{ guest_id?: number; name?: string; full_name?: string }> | null;
+}
+
 function deduplicateReservationsByGuest(
-  reservations: Array<{ id: number; guest_id: number; company_id: number | null; check_in: string; check_out: string }>
-): Array<{ id: number; guest_id: number; company_id: number | null; check_in: string; check_out: string }> {
+  reservations: ReservationWithCompanions[]
+): ReservationWithCompanions[] {
   const byGuest: {
-    [guestId: number]: Array<{ id: number; guest_id: number; company_id: number | null; check_in: string; check_out: string }>;
+    [guestId: number]: ReservationWithCompanions[];
   } = {};
 
   reservations.forEach((r) => {
@@ -19,7 +28,7 @@ function deduplicateReservationsByGuest(
     byGuest[r.guest_id].push(r);
   });
 
-  const deduped: Array<{ id: number; guest_id: number; company_id: number | null; check_in: string; check_out: string }> = [];
+  const deduped: ReservationWithCompanions[] = [];
 
   Object.entries(byGuest).forEach(([guestId, reservs]) => {
     if (reservs.length === 1) {
@@ -114,9 +123,10 @@ export async function POST(
 
       // Get reservations that cover the given date (check_in <= fecha AND check_out >= fecha)
       // with status IN ('confirmed', 'checked_in')
+      // Include companions_json to expand companion guests into separate meal_consumption records
       const { data: reservations, error } = await supabase
         .from("hostal_reservations")
-        .select("id, guest_id, company_id, status, check_in, check_out")
+        .select("id, guest_id, company_id, status, check_in, check_out, companions_json")
         .lte("check_in", fecha)
         .gte("check_out", fecha)
         .in("status", ["confirmed", "checked_in"]);
@@ -132,14 +142,46 @@ export async function POST(
       const deduplicatedReservations = deduplicateReservationsByGuest(activeReservations);
 
       // Create meal consumption for each deduplicated reservation
-      const consumptions = deduplicatedReservations.map((reservation) => ({
-        meal_service_id: serviceId,
-        guest_id: reservation.guest_id,
-        reservation_id: reservation.id,
-        company_id: reservation.company_id || null,
-        eleccion: null,
-        estado_whatsapp: "pendiente" as const,
-      }));
+      // Plus one for each companion in companions_json
+      const consumptions: Array<{
+        meal_service_id: number;
+        guest_id: number;
+        reservation_id: number;
+        company_id: number | null;
+        eleccion: null;
+        estado_whatsapp: "pendiente";
+      }> = [];
+
+      const processedGuestIds = new Set<number>();
+
+      deduplicatedReservations.forEach((reservation) => {
+        // Add titular guest
+        consumptions.push({
+          meal_service_id: serviceId,
+          guest_id: reservation.guest_id,
+          reservation_id: reservation.id,
+          company_id: reservation.company_id || null,
+          eleccion: null,
+          estado_whatsapp: "pendiente" as const,
+        });
+        processedGuestIds.add(reservation.guest_id);
+
+        // Add companions from companions_json
+        const companions = reservation.companions_json || [];
+        (Array.isArray(companions) ? companions : []).forEach((companion: any) => {
+          if (companion.guest_id && !processedGuestIds.has(companion.guest_id)) {
+            consumptions.push({
+              meal_service_id: serviceId,
+              guest_id: companion.guest_id,
+              reservation_id: reservation.id,
+              company_id: reservation.company_id || null,
+              eleccion: null,
+              estado_whatsapp: "pendiente" as const,
+            });
+            processedGuestIds.add(companion.guest_id);
+          }
+        });
+      });
 
       const created = await createBatchMealConsumption(consumptions);
 
