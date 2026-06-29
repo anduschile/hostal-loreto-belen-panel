@@ -55,10 +55,10 @@ export async function getMealReportData(
   let query = client
     .from("hostal_meal_consumption")
     .select(`
-      hostal_meal_services(fecha, tipo_servicio),
+      meal_service_id,
+      hostal_meal_services(fecha, tipo_servicio, menu_a_id, menu_b_id),
       hostal_guests(full_name),
       hostal_companies(name),
-      hostal_menus!menu_servido_id(nombre),
       precio_snapshot,
       eleccion
     `)
@@ -72,15 +72,36 @@ export async function getMealReportData(
 
   if (error) throw new Error(`Failed to fetch meal report: ${error.message}`);
 
+  // Fetch all menus to map IDs to names
+  const { data: menus, error: menusError } = await client
+    .from("hostal_menus")
+    .select("id, nombre");
+
+  if (menusError) throw new Error(`Failed to fetch menus: ${menusError.message}`);
+
+  const menuMap: Record<number, string> = {};
+  (menus || []).forEach((m: any) => {
+    menuMap[m.id] = m.nombre;
+  });
+
   return (data || []).map((row: any) => {
     const precio = row.precio_snapshot || null;
     const precio_con_iva = precio !== null ? Math.round(precio * 1.19) : null;
+
+    // Get menu name based on choice (A or B)
+    let menuNombre = "Desconocido";
+    if (row.eleccion === "A" && row.hostal_meal_services?.menu_a_id) {
+      menuNombre = menuMap[row.hostal_meal_services.menu_a_id] || "Desconocido";
+    } else if (row.eleccion === "B" && row.hostal_meal_services?.menu_b_id) {
+      menuNombre = menuMap[row.hostal_meal_services.menu_b_id] || "Desconocido";
+    }
+
     return {
       fecha: row.hostal_meal_services?.fecha || "",
       guest_full_name: row.hostal_guests?.full_name || "Desconocido",
       company_name: row.hostal_companies?.name || null,
       tipo_servicio: row.hostal_meal_services?.tipo_servicio || "",
-      menu_nombre: row.hostal_menus?.nombre || "Desconocido",
+      menu_nombre: menuNombre,
       precio,
       precio_con_iva,
       eleccion: row.eleccion || null,

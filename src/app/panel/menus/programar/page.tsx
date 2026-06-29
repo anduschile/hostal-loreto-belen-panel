@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { MealService, HostalMenu } from "@/types/hostal";
 import MealConsumptionTable from "@/components/menus/MealConsumptionTable";
+import EditMealServiceModal from "@/components/menus/EditMealServiceModal";
 import { formatDateCL } from "@/lib/utils/date";
 import { toast } from "sonner";
 
@@ -14,8 +15,10 @@ export default function ProgramarPage() {
 
   const [mealService, setMealService] = useState<MealService | null>(null);
   const [menus, setMenus] = useState<Record<number, HostalMenu>>({});
+  const [menusList, setMenusList] = useState<HostalMenu[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   useEffect(() => {
     if (serviceId) {
@@ -47,6 +50,7 @@ export default function ProgramarPage() {
           menusMap[m.id] = m;
         });
         setMenus(menusMap);
+        setMenusList(menusData);
       }
 
       // Auto-load meal consumption if empty
@@ -84,6 +88,10 @@ export default function ProgramarPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleServiceUpdated = (updated: MealService) => {
+    setMealService(updated);
   };
 
   if (loading) {
@@ -133,10 +141,16 @@ export default function ProgramarPage() {
 
           <div className="border rounded-lg p-4 bg-slate-50">
             <h3 className="text-sm font-bold text-gray-600 mb-2">Menús</h3>
-            <p className="text-lg">
+            <p className="text-lg mb-3">
               <span className="font-bold">A:</span> {menuA?.nombre || "Cargando..."}{" "}
               | <span className="font-bold">B:</span> {menuB?.nombre || "Cargando..."}
             </p>
+            <button
+              onClick={() => setEditModalOpen(true)}
+              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+            >
+              ✏️ Editar
+            </button>
           </div>
         </div>
 
@@ -157,6 +171,16 @@ export default function ProgramarPage() {
           menuBName={menuB.nombre}
           fecha={mealService.fecha}
           tipoServicio={mealService.tipo_servicio}
+        />
+      )}
+
+      {mealService && (
+        <EditMealServiceModal
+          open={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          service={mealService}
+          menus={menusList}
+          onUpdated={handleServiceUpdated}
         />
       )}
     </div>

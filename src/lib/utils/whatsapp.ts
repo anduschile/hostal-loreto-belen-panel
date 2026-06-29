@@ -72,7 +72,7 @@ export function buildWhatsappMessage(params: WhatsappMessageParams): WhatsappMes
   mensaje += `\n`;
 
   mensaje += `Respóndenos con *A* o *B* para tener tu plato listo cuando llegues.\n\n`;
-  mensaje += `⏰ *Confirma tu elección lo antes posible, preferiblemente antes de la hora del servicio.*\n`;
+  mensaje += `⏰ *Confirma tu elección lo antes posible, preferiblemente a mas tardar 06 (seís) horas antes del servicio.*\n`;
   mensaje += `Si no confirmas a tiempo, el hostal te asignará una de las opciones disponibles.\n\n`;
   mensaje += `Saludos`;
 
