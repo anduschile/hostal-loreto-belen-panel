@@ -17,6 +17,7 @@ interface ConsumptionWithGuestAndCompany extends MealConsumption {
   guest_full_name?: string;
   company_name?: string | null;
   guest_phone?: string;
+  menu_name?: string;
 }
 
 export default function MealConsumptionTable({
@@ -31,6 +32,7 @@ export default function MealConsumptionTable({
   const [error, setError] = useState("");
   const [guests, setGuests] = useState<Record<number, any>>({});
   const [companies, setCompanies] = useState<Record<number, any>>({});
+  const [menus, setMenus] = useState<Record<number, any>>({});
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
   const [selectedConsumption, setSelectedConsumption] = useState<ConsumptionWithGuestAndCompany | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
@@ -45,10 +47,11 @@ export default function MealConsumptionTable({
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [consumptionRes, guestsRes, companiesRes] = await Promise.all([
+      const [consumptionRes, guestsRes, companiesRes, menusRes] = await Promise.all([
         fetch(`/api/meal-services/${serviceId}/consumption`),
         fetch("/api/guests"),
         fetch("/api/companies"),
+        fetch("/api/menus"),
       ]);
 
       if (!consumptionRes.ok) throw new Error("Failed to fetch consumptions");
@@ -56,6 +59,7 @@ export default function MealConsumptionTable({
       const { data: consumptionData } = await consumptionRes.json();
       let guestsData: any = [];
       let companiesData: any = [];
+      let menusData: any = [];
 
       if (guestsRes.ok) {
         const guestsJson = await guestsRes.json();
@@ -67,8 +71,14 @@ export default function MealConsumptionTable({
         companiesData = companiesJson || [];
       }
 
+      if (menusRes.ok) {
+        const menusJson = await menusRes.json();
+        menusData = menusJson.data || [];
+      }
+
       const guestsMap: Record<number, any> = {};
       const companiesMap: Record<number, any> = {};
+      const menusMap: Record<number, any> = {};
 
       guestsData.forEach((g: any) => {
         guestsMap[g.id] = g;
@@ -78,17 +88,23 @@ export default function MealConsumptionTable({
         companiesMap[c.id] = c;
       });
 
-      // Enrich consumption data with guest and company info
+      menusData.forEach((m: any) => {
+        menusMap[m.id] = m;
+      });
+
+      // Enrich consumption data with guest, company, and menu info
       const enrichedConsumptions = consumptionData.map((c: MealConsumption) => ({
         ...c,
         guest_full_name: guestsMap[c.guest_id]?.full_name || "Desconocido",
         company_name: c.company_id ? companiesMap[c.company_id]?.name : null,
         guest_phone: guestsMap[c.guest_id]?.phone,
+        menu_name: c.menu_servido_id ? menusMap[c.menu_servido_id]?.nombre : null,
       }));
 
       setConsumptions(enrichedConsumptions);
       setGuests(guestsMap);
       setCompanies(companiesMap);
+      setMenus(menusMap);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -190,6 +206,12 @@ export default function MealConsumptionTable({
     }
   };
 
+  // Get names of first menu assigned (for stats display)
+  const firstMenuAId = consumptions.find((c) => c.eleccion === "A")?.menu_servido_id;
+  const firstMenuBId = consumptions.find((c) => c.eleccion === "B")?.menu_servido_id;
+  const displayMenuAName = firstMenuAId ? menus[firstMenuAId]?.nombre : menuAName;
+  const displayMenuBName = firstMenuBId ? menus[firstMenuBId]?.nombre : menuBName;
+
   const stats = {
     total: consumptions.length,
     chosenA: consumptions.filter((c) => c.eleccion === "A").length,
@@ -215,11 +237,11 @@ export default function MealConsumptionTable({
           </div>
           <div>
             <div className="text-2xl font-bold text-blue-600">{stats.chosenA}</div>
-            <div className="text-xs text-gray-600">Eligieron {menuAName}</div>
+            <div className="text-xs text-gray-600">Eligieron {displayMenuAName}</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-purple-600">{stats.chosenB}</div>
-            <div className="text-xs text-gray-600">Eligieron {menuBName}</div>
+            <div className="text-xs text-gray-600">Eligieron {displayMenuBName}</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-orange-600">{stats.pending}</div>
@@ -293,7 +315,7 @@ export default function MealConsumptionTable({
                 <td className="border px-4 py-2 text-sm">
                   {consumption.eleccion ? (
                     <div className="font-bold text-emerald-600">
-                      {consumption.eleccion}: {consumption.eleccion === "A" ? menuAName : menuBName}
+                      {consumption.eleccion}: {consumption.menu_name || (consumption.eleccion === "A" ? menuAName : menuBName)}
                     </div>
                   ) : (
                     <span className="text-gray-500">-</span>

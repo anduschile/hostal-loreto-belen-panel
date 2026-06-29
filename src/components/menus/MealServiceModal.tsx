@@ -33,13 +33,17 @@ export default function MealServiceModal({
   const [error, setError] = useState("");
   const [loadingMenus, setLoadingMenus] = useState(true);
   const [multiexportPrices, setMultiexportPrices] = useState<{ preferencial: number; normal: number } | null>(null);
+  const [consumptionCount, setConsumptionCount] = useState(0);
 
   useEffect(() => {
     if (open) {
       fetchMenus();
       fetchMultiexportPrices();
+      if (mealService?.id) {
+        fetchConsumptionCount();
+      }
     }
-  }, [open]);
+  }, [open, mealService?.id]);
 
   const fetchMenus = async () => {
     try {
@@ -70,6 +74,19 @@ export default function MealServiceModal({
       }
     } catch (err: any) {
       console.error("Failed to fetch multiexport prices:", err);
+    }
+  };
+
+  const fetchConsumptionCount = async () => {
+    if (!mealService?.id) return;
+    try {
+      const res = await fetch(`/api/meal-services/${mealService.id}/consumption`);
+      if (res.ok) {
+        const { data } = await res.json();
+        setConsumptionCount(data?.length || 0);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch consumption count:", err);
     }
   };
 
@@ -127,6 +144,16 @@ export default function MealServiceModal({
         {error && (
           <div className="mb-4 p-3 bg-red-100 text-red-700 rounded text-sm">
             {error}
+          </div>
+        )}
+
+        {consumptionCount > 0 && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+            <div className="font-semibold mb-1">⚠️ Servicio con elecciones registradas</div>
+            <div>
+              Este servicio ya tiene {consumptionCount} {consumptionCount === 1 ? "elección" : "elecciones"} registrada{consumptionCount === 1 ? "" : "s"}.
+              Los huéspedes que ya eligieron mantendrán su plato asignado; el cambio solo aplicará a quienes elijan después.
+            </div>
           </div>
         )}
 
