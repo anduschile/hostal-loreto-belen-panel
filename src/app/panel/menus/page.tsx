@@ -14,6 +14,7 @@ export default function MenusPage() {
   const [mealServices, setMealServices] = useState<MealService[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [choicesCount, setChoicesCount] = useState<Record<number, { confirmadas: number; total: number }>>({});
 
   const getDefaultDateRange = () => {
     const today = new Date();
@@ -77,10 +78,33 @@ export default function MenusPage() {
       if (!res.ok) throw new Error("Failed to fetch meal services");
       const { data } = await res.json();
       setMealServices(data);
+
+      // Fetch choices count for each service
+      fetchChoicesCount(data.map((s: MealService) => s.id));
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchChoicesCount = async (serviceIds: number[]) => {
+    try {
+      const counts: Record<number, { confirmadas: number; total: number }> = {};
+
+      for (const serviceId of serviceIds) {
+        const res = await fetch(`/api/meal-services/${serviceId}/consumption`);
+        if (!res.ok) continue;
+        const { data: consumptions } = await res.json();
+
+        const total = consumptions?.length || 0;
+        const confirmadas = consumptions?.filter((c: any) => c.eleccion).length || 0;
+        counts[serviceId] = { confirmadas, total };
+      }
+
+      setChoicesCount(counts);
+    } catch (err: any) {
+      console.error("Failed to fetch choices count:", err);
     }
   };
 
@@ -162,6 +186,22 @@ export default function MenusPage() {
     } catch (err: any) {
       toast.error(err.message);
     }
+  };
+
+  const handleDuplicateMealService = (service: MealService) => {
+    // Create a template without ID for duplication
+    const template = {
+      fecha: service.fecha,
+      tipo_servicio: service.tipo_servicio,
+      menu_a_id: service.menu_a_id,
+      menu_b_id: service.menu_b_id,
+      tipo_precio: service.tipo_precio,
+      notas: service.notas,
+      // No ID - this signals it's a new service, not an edit
+    } as any;
+
+    setSelectedMealService(template);
+    setMealServiceModalOpen(true);
   };
 
   return (
@@ -365,48 +405,75 @@ export default function MenusPage() {
                       Menú B
                     </th>
                     <th className="border px-4 py-2 text-center font-semibold">
+                      Elecciones
+                    </th>
+                    <th className="border px-4 py-2 text-center font-semibold">
                       Acciones
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {mealServices.map((service) => (
-                    <tr key={service.id} className="hover:bg-gray-50">
-                      <td className="border px-4 py-2">{formatDateCL(service.fecha)}</td>
-                      <td className="border px-4 py-2 capitalize">
-                        {service.tipo_servicio}
-                      </td>
-                      <td className="border px-4 py-2">
-                        {menus.find(m => m.id === service.menu_a_id)?.nombre || `Menú ${service.menu_a_id}`}
-                      </td>
-                      <td className="border px-4 py-2">
-                        {menus.find(m => m.id === service.menu_b_id)?.nombre || `Menú ${service.menu_b_id}`}
-                      </td>
-                      <td className="border px-4 py-2 text-center space-x-2">
-                        <a
-                          href={`/panel/menus/programar?serviceId=${service.id}`}
-                          className="px-3 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                        >
-                          Gestionar
-                        </a>
-                        <button
-                          onClick={() => {
-                            setSelectedMealService(service);
-                            setMealServiceModalOpen(true);
-                          }}
-                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMealService(service.id)}
-                          className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                        >
-                          Borrar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {mealServices.map((service) => {
+                    const counts = choicesCount[service.id] || { confirmadas: 0, total: 0 };
+                    const choicesText = counts.total === 0
+                      ? "vacío"
+                      : `${counts.confirmadas} de ${counts.total} confirmadas`;
+
+                    return (
+                      <tr key={service.id} className="hover:bg-gray-50">
+                        <td className="border px-4 py-2">{formatDateCL(service.fecha)}</td>
+                        <td className="border px-4 py-2 capitalize">
+                          {service.tipo_servicio}
+                        </td>
+                        <td className="border px-4 py-2">
+                          {menus.find(m => m.id === service.menu_a_id)?.nombre || `Menú ${service.menu_a_id}`}
+                        </td>
+                        <td className="border px-4 py-2">
+                          {menus.find(m => m.id === service.menu_b_id)?.nombre || `Menú ${service.menu_b_id}`}
+                        </td>
+                        <td className="border px-4 py-2 text-center">
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            counts.total === 0
+                              ? "bg-gray-100 text-gray-700"
+                              : counts.confirmadas === counts.total
+                              ? "bg-green-100 text-green-700"
+                              : "bg-yellow-100 text-yellow-700"
+                          }`}>
+                            {choicesText}
+                          </span>
+                        </td>
+                        <td className="border px-4 py-2 text-center space-x-2">
+                          <a
+                            href={`/panel/menus/programar?serviceId=${service.id}`}
+                            className="px-3 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                          >
+                            Gestionar
+                          </a>
+                          <button
+                            onClick={() => handleDuplicateMealService(service)}
+                            className="px-3 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700"
+                          >
+                            Duplicar
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedMealService(service);
+                              setMealServiceModalOpen(true);
+                            }}
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMealService(service.id)}
+                            className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                          >
+                            Borrar
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

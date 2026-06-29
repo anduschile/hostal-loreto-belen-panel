@@ -121,7 +121,7 @@ export default function MealServiceModal({
     <Modal open={open} onClose={onClose}>
       <div className="w-full max-w-md">
         <h2 className="text-lg font-bold mb-4">
-          {mealService ? "Editar Servicio" : "Nuevo Servicio de Comida"}
+          {mealService?.id ? "Editar Servicio" : "Nuevo Servicio de Comida"}
         </h2>
 
         {error && (
