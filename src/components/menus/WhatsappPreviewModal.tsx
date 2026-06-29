@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Modal from "@/components/Modal";
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { MealConsumption, HostalMenu } from "@/types/hostal";
@@ -18,6 +18,29 @@ interface Props {
   fecha: string;
   tipoServicio: string;
   onSent: () => void;
+}
+
+// Convert WhatsApp message text to JSX with formatting
+function renderWhatsappMessage(texto: string): JSX.Element {
+  return (
+    <>
+      {texto.split("\n").map((line, idx) => {
+        // Replace *text* with <strong>text</strong>
+        const parts = line.split(/(\*[^*]+\*)/g);
+        return (
+          <div key={idx}>
+            {parts.map((part, pidx) => {
+              if (part.startsWith("*") && part.endsWith("*")) {
+                return <strong key={pidx}>{part.slice(1, -1)}</strong>;
+              }
+              return <span key={pidx}>{part}</span>;
+            })}
+            <br />
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 export default function WhatsappPreviewModal({
@@ -45,9 +68,6 @@ export default function WhatsappPreviewModal({
     try {
       setLoading(true);
       setError("");
-      // We need menu IDs from the meal service, but we don't have them here
-      // This is a limitation of the current component structure
-      // For now, we'll just use the menu names
       setMenuA(null);
       setMenuB(null);
       setLoading(false);
@@ -57,25 +77,28 @@ export default function WhatsappPreviewModal({
     }
   };
 
+  // Generate the actual message that will be sent
+  const whatsappMessage = useMemo(() => {
+    return buildWhatsappMessage({
+      guestName: consumption.guest_full_name || "Huésped",
+      fecha,
+      tipoServicio,
+      menuANombre: menuAName,
+      menuADescripcion: menuA?.descripcion || null,
+      menuAFotoUrl: menuA?.foto_url || null,
+      menuBNombre: menuBName,
+      menuBDescripcion: menuB?.descripcion || null,
+      menuBFotoUrl: menuB?.foto_url || null,
+      phoneNumber: consumption.guest_phone || "",
+    });
+  }, [consumption, fecha, tipoServicio, menuAName, menuBName, menuA, menuB]);
+
   const handleSendWhatsapp = async () => {
     try {
       if (!consumption.guest_phone) {
         setError("El huésped no tiene teléfono registrado");
         return;
       }
-
-      const message = buildWhatsappMessage({
-        guestName: consumption.guest_full_name || "Huésped",
-        fecha,
-        tipoServicio,
-        menuANombre: menuAName,
-        menuADescripcion: menuA?.descripcion || null,
-        menuAFotoUrl: menuA?.foto_url || null,
-        menuBNombre: menuBName,
-        menuBDescripcion: menuB?.descripcion || null,
-        menuBFotoUrl: menuB?.foto_url || null,
-        phoneNumber: consumption.guest_phone,
-      });
 
       // Update status
       await fetch(`/api/meal-consumption/${consumption.id}`, {
@@ -87,8 +110,8 @@ export default function WhatsappPreviewModal({
         }),
       });
 
-      // Open WhatsApp
-      window.open(message.linkWaMe, "_blank");
+      // Open WhatsApp with the same message shown in preview
+      window.open(whatsappMessage.linkWaMe, "_blank");
 
       onSent();
       onClose();
@@ -112,31 +135,7 @@ export default function WhatsappPreviewModal({
 
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 max-h-96 overflow-y-auto">
           <div className="text-xs text-green-800 whitespace-pre-wrap font-mono">
-            Hola {consumption.guest_full_name},
-            <br />
-            <br />
-            Te saluda Hostal Loreto Belén. Te esperamos el {fecha} para tu{" "}
-            {tipoServicio}.
-            <br />
-            <br />
-            Tenemos dos alternativas:
-            <br />
-            <br />
-            <strong>Opción A:</strong> {menuAName}
-            <br />
-            {menuA?.descripcion && `${menuA.descripcion}\n`}
-            {menuA?.foto_url && `[Foto: ${menuA.foto_url}]\n`}
-            <br />
-            <strong>Opción B:</strong> {menuBName}
-            <br />
-            {menuB?.descripcion && `${menuB.descripcion}\n`}
-            {menuB?.foto_url && `[Foto: ${menuB.foto_url}]\n`}
-            <br />
-            Respóndenos con <strong>A</strong> o <strong>B</strong> para tener tu
-            plato listo cuando llegues.
-            <br />
-            <br />
-            Saludos
+            {renderWhatsappMessage(whatsappMessage.texto)}
           </div>
         </div>
 
