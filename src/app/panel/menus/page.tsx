@@ -15,6 +15,20 @@ export default function MenusPage() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const getDefaultDateRange = () => {
+    const today = new Date();
+    const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return {
+      from: oneMonthAgo.toISOString().split("T")[0],
+      to: weekFromNow.toISOString().split("T")[0],
+    };
+  };
+
+  const defaultRange = getDefaultDateRange();
+  const [dateFrom, setDateFrom] = useState(defaultRange.from);
+  const [dateTo, setDateTo] = useState(defaultRange.to);
+
   const [menuFormOpen, setMenuFormOpen] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState<HostalMenu | null>(null);
   const [selectedMenuForPrices, setSelectedMenuForPrices] =
@@ -51,16 +65,14 @@ export default function MenusPage() {
     }
   };
 
-  const fetchMealServices = async () => {
+  const fetchMealServices = async (from?: string, to?: string) => {
     try {
       setLoading(true);
-      const today = new Date().toISOString().split("T")[0];
-      const weekFromNow = new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split("T")[0];
+      const fromDate = from || dateFrom;
+      const toDate = to || dateTo;
 
       const res = await fetch(
-        `/api/meal-services?from=${today}&to=${weekFromNow}`
+        `/api/meal-services?from=${fromDate}&to=${toDate}`
       );
       if (!res.ok) throw new Error("Failed to fetch meal services");
       const { data } = await res.json();
@@ -275,6 +287,50 @@ export default function MenusPage() {
 
       {activeTab === "programming" && (
         <div className="space-y-4">
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <div className="flex gap-4 items-end flex-wrap">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Desde
+                </label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Hasta
+                </label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </div>
+              <button
+                onClick={() => fetchMealServices(dateFrom, dateTo)}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium text-sm"
+              >
+                Buscar
+              </button>
+              <button
+                onClick={() => {
+                  const defaultRange = getDefaultDateRange();
+                  setDateFrom(defaultRange.from);
+                  setDateTo(defaultRange.to);
+                  fetchMealServices(defaultRange.from, defaultRange.to);
+                }}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 font-medium text-sm"
+              >
+                Hoy y próximos 7 días
+              </button>
+            </div>
+          </div>
+
           <button
             onClick={() => {
               setSelectedMealService(null);

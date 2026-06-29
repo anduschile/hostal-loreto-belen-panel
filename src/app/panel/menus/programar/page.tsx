@@ -72,6 +72,9 @@ export default function ProgramarPage() {
 
           if (autoloadRes.ok) {
             toast.success("Huéspedes cargados automáticamente");
+          } else if (autoloadRes.status === 409) {
+            const { error } = await autoloadRes.json();
+            toast.warning(error || "Agrega huéspedes manualmente para este servicio");
           }
         }
       }

@@ -79,11 +79,41 @@ export async function POST(
 
     // If action is "autoload", fetch active reservations for this date
     if (action === "autoload") {
-      // Get reservations that cover the given date (check_in <= fecha AND check_out >= fecha)
-      // with status IN ('confirmed', 'checked_in')
       const { createClient } = await import("@/lib/supabase/server");
       const supabase = await createClient();
 
+      // Check if there are multiple meal services of the same tipo_servicio for this fecha
+      const { data: mealService, error: mealServiceError } = await supabase
+        .from("hostal_meal_services")
+        .select("id, tipo_servicio")
+        .eq("id", serviceId)
+        .single();
+
+      if (mealServiceError || !mealService) {
+        throw new Error("Meal service not found");
+      }
+
+      const { data: conflictingServices, error: conflictError } = await supabase
+        .from("hostal_meal_services")
+        .select("id")
+        .eq("fecha", fecha)
+        .eq("tipo_servicio", mealService.tipo_servicio);
+
+      if (conflictError) {
+        throw new Error(`Failed to check for conflicting services: ${conflictError.message}`);
+      }
+
+      // If there are multiple services of the same type on this date, skip autoload
+      if ((conflictingServices?.length || 0) > 1) {
+        return NextResponse.json({
+          ok: false,
+          error: "Hay múltiples servicios de " + mealService.tipo_servicio + " para esta fecha. Agrega huéspedes manualmente.",
+          skipAutoload: true
+        }, { status: 409 });
+      }
+
+      // Get reservations that cover the given date (check_in <= fecha AND check_out >= fecha)
+      // with status IN ('confirmed', 'checked_in')
       const { data: reservations, error } = await supabase
         .from("hostal_reservations")
         .select("id, guest_id, company_id, status, check_in, check_out")
