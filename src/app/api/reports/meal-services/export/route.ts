@@ -70,16 +70,24 @@ export async function GET(req: Request) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Servicios de Comida");
 
-    // Define columns
+    // Define columns (order: Fecha | Huésped | Tipo Servicio | Menú Servido | Precio Neto | Precio con IVA | Empresa)
     worksheet.columns = [
-      { header: "FECHA", key: "fecha", width: 12 },
-      { header: "HUÉSPED", key: "huesped", width: 25 },
-      { header: "EMPRESA", key: "empresa", width: 20 },
-      { header: "TIPO SERVICIO", key: "tipo_servicio", width: 15 },
-      { header: "MENÚ SERVIDO", key: "menu_servido", width: 30 },
-      { header: "PRECIO NETO", key: "precio_neto", width: 15 },
-      { header: "PRECIO CON IVA", key: "precio_con_iva", width: 16 },
+      { header: "FECHA", key: "fecha" },
+      { header: "HUÉSPED", key: "huesped" },
+      { header: "TIPO SERVICIO", key: "tipo_servicio" },
+      { header: "MENÚ SERVIDO", key: "menu_servido" },
+      { header: "PRECIO NETO", key: "precio_neto" },
+      { header: "PRECIO CON IVA", key: "precio_con_iva" },
+      { header: "EMPRESA", key: "empresa" },
     ];
+
+    // Landscape orientation, fit all columns to one page wide (print-friendly)
+    worksheet.pageSetup = {
+      orientation: "landscape",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+    };
 
     // Style header row (row 1)
     const headerRow = worksheet.getRow(1);
@@ -114,11 +122,11 @@ export async function GET(req: Request) {
       const columnAlignments = [
         "center", // FECHA
         "left",   // HUÉSPED
-        "left",   // EMPRESA
         "center", // TIPO SERVICIO
         "left",   // MENÚ SERVIDO
         "center", // PRECIO NETO
         "center", // PRECIO CON IVA
+        "left",   // EMPRESA
       ];
 
       newRow.eachCell((cell, colNum) => {
@@ -136,9 +144,9 @@ export async function GET(req: Request) {
         applyBorderStyle(cell);
 
         // Apply number format for price columns (neto and con IVA)
-        if ((colNum === 6 || colNum === 7) && typeof cell.value === "number") {
+        if ((colNum === 5 || colNum === 6) && typeof cell.value === "number") {
           cell.numFmt = '"$"#,##0';
-        } else if ((colNum === 6 || colNum === 7) && cell.value === "Pendiente") {
+        } else if ((colNum === 5 || colNum === 6) && cell.value === "Pendiente") {
           cell.font = { italic: true, color: { argb: "FF808080" } };
         }
       });
@@ -166,14 +174,14 @@ export async function GET(req: Request) {
       applyBorderStyle(cell);
 
       // Align TOTAL label to right
-      if (colNum === 5) {
+      if (colNum === 4) {
         cell.alignment = { horizontal: "right" };
-      } else if (colNum === 6 || colNum === 7) {
+      } else if (colNum === 5 || colNum === 6) {
         cell.alignment = { horizontal: "center" };
       }
 
       // Apply currency format to price columns
-      if ((colNum === 6 || colNum === 7) && typeof cell.value === "number") {
+      if ((colNum === 5 || colNum === 6) && typeof cell.value === "number") {
         cell.numFmt = '"$"#,##0';
       }
     });
@@ -204,13 +212,13 @@ export async function GET(req: Request) {
       });
 
       row.eachCell((cell, colNum) => {
-        // Bold labels in column 3 (EMPRESA)
-        if (colNum === 3) {
+        // Bold labels in column 7 (EMPRESA)
+        if (colNum === 7) {
           cell.font = { bold: true };
           cell.alignment = { horizontal: "left" };
         }
         // Format price columns
-        else if (colNum === 6 && typeof cell.value === "number") {
+        else if (colNum === 5 && typeof cell.value === "number") {
           cell.alignment = { horizontal: "center" };
           if (!summaryRow.isNumeric) {
             cell.numFmt = '"$"#,##0';
@@ -220,6 +228,45 @@ export async function GET(req: Request) {
         applyBorderStyle(cell);
       });
     });
+
+    // Excel column width units are calibrated to the digit "0" glyph; uppercase letters
+    // render noticeably wider than that unit, so a raw character count underestimates
+    // the width needed for all-caps content (common in guest names and menu text) and
+    // causes visual clipping even with padding. Weight characters by rendered width instead.
+    function estimateExcelWidth(text: string): number {
+      let width = 0;
+      for (const ch of text) {
+        if (ch >= "A" && ch <= "Z") {
+          width += 1.3;
+        } else if (ch === " " || "iIlj.,:;'!|".includes(ch)) {
+          width += 0.5;
+        } else {
+          width += 1.0;
+        }
+      }
+      return width;
+    }
+
+    // Auto-fit column widths to the actual content (header vs. widest cell), plus padding
+    const columnCount = worksheet.columns.length;
+    for (let colNum = 1; colNum <= columnCount; colNum++) {
+      let maxLen = 0;
+      worksheet.eachRow({ includeEmpty: false }, (row) => {
+        const cell = row.getCell(colNum);
+        if (cell.value === null || cell.value === undefined) return;
+
+        let text: string;
+        if (typeof cell.value === "number" && cell.numFmt) {
+          text = `$${Math.round(cell.value).toLocaleString("es-CL")}`;
+        } else {
+          text = String(cell.value);
+        }
+
+        const len = estimateExcelWidth(text);
+        if (len > maxLen) maxLen = len;
+      });
+      worksheet.getColumn(colNum).width = Math.ceil(maxLen) + 3;
+    }
 
     // Generate Excel file
     const buffer = await workbook.xlsx.writeBuffer();
