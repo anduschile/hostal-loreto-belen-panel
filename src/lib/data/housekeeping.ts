@@ -1,11 +1,8 @@
 // src/lib/data/housekeeping.ts
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
 import type { HousekeepingEntry, HousekeepingStatus, HostalRoom } from "@/types/hostal";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient();
 
 export async function getHousekeepingByDate(
   date: string

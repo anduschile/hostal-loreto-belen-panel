@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect } from "react";
 import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Search, Download, Calendar, User, FileText } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 type LogEntry = {
     id: string; // unique key
@@ -32,24 +31,23 @@ export default function GuestsLogClient() {
     useEffect(() => {
         const fetchLog = async () => {
             setLoading(true);
-            const supabase = createClient();
 
             // Fetch reservations that overlap or start in range? Usually "Check-ins in range" or "Active in range"
             // Let's fetch strict date check-ins for the log book usually implies "Arrivals" or "In House".
             // User asked for "Guest Log". Let's fetch based on Check-in date for now as default log view.
 
-            const { data, error } = await supabase
-                .from("hostal_reservations")
-                .select(`
-                    id, check_in, check_out, status, notes, source,
-                    hostal_rooms (name),
-                    hostal_guests (full_name, document_id)
-                `)
-                .gte("check_in", dateFrom)
-                .lte("check_in", dateTo)
-                .order("check_in", { ascending: false });
-
-            if (error) {
+            let data: any[] = [];
+            try {
+                const res = await fetch(
+                    `/api/guests-log?from=${encodeURIComponent(dateFrom)}&to=${encodeURIComponent(dateTo)}`
+                );
+                if (!res.ok) {
+                    console.error("Error cargando registro de huéspedes:", res.status);
+                    setLoading(false);
+                    return;
+                }
+                data = await res.json();
+            } catch (error) {
                 console.error(error);
                 setLoading(false);
                 return;

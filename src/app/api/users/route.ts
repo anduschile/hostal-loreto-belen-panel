@@ -2,11 +2,15 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { createClient } from "@supabase/supabase-js";
+import { requireRole } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 
 // GET: List users
 export async function GET() {
+    const auth = await requireRole(["superadmin"]);
+    if (!auth.ok) return auth.response;
+
     try {
         const { data, error } = await supabaseAdmin
             .from("hostal_users")
@@ -23,6 +27,9 @@ export async function GET() {
 
 // POST: Create User
 export async function POST(req: Request) {
+    const auth = await requireRole(["superadmin"]);
+    if (!auth.ok) return auth.response;
+
     try {
         const body = await req.json();
         const { email, password, full_name, role } = body;

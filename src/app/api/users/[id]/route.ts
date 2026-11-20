@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireRole } from "@/lib/auth/server";
 
 // PATCH: Update user details (role, full_name)
 // PATCH: Update user details (role, full_name)
@@ -9,6 +10,9 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const auth = await requireRole(["superadmin"]);
+    if (!auth.ok) return auth.response;
+
     try {
         const body = await req.json();
         const { full_name, role } = body;
@@ -38,6 +42,9 @@ export async function DELETE(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const auth = await requireRole(["superadmin"]);
+    if (!auth.ok) return auth.response;
+
     try {
         const { id } = await params;
 

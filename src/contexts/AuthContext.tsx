@@ -7,7 +7,8 @@ import {
     useState,
     ReactNode,
 } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
 // Define UserRole
@@ -23,13 +24,16 @@ type AuthContextValue = {
     user: AuthUser | null;
     role: UserRole | null;
     loading: boolean;
+    accessError: string | null;
     signIn: (email: string, password: string) => Promise<void>;
     signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// --- Crear cliente de Supabase para el lado cliente ---
+const NO_ACCESS_MESSAGE = "Usuario sin acceso al panel";
+
+// --- Cliente de Supabase para el navegador: la sesión vive en cookies (legibles por el servidor) ---
 let supabaseBrowserClient: SupabaseClient | null = null;
 
 function getSupabaseClient(): SupabaseClient {
@@ -44,8 +48,26 @@ function getSupabaseClient(): SupabaseClient {
         );
     }
 
-    supabaseBrowserClient = createClient(url, anonKey);
+    supabaseBrowserClient = createBrowserClient(url, anonKey);
     return supabaseBrowserClient;
+}
+
+type MeResult =
+    | { status: "ok"; role: UserRole; full_name: string | null }
+    | { status: "denied" }
+    | { status: "error" };
+
+// El rol y el nombre se obtienen del servidor (/api/me), no desde el navegador contra la base de datos.
+async function fetchMe(): Promise<MeResult> {
+    try {
+        const res = await fetch("/api/me", { cache: "no-store" });
+        if (res.status === 401 || res.status === 403) return { status: "denied" };
+        if (!res.ok) return { status: "error" };
+        const body = await res.json();
+        return { status: "ok", role: body.role as UserRole, full_name: body.full_name ?? null };
+    } catch {
+        return { status: "error" };
+    }
 }
 
 type AuthProviderProps = {
@@ -56,13 +78,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [role, setRole] = useState<UserRole | null>(null);
     const [loading, setLoading] = useState(true);
+    const [accessError, setAccessError] = useState<string | null>(null);
     const router = useRouter();
 
     const supabase = getSupabaseClient();
 
-    // Cargar sesión inicial y rol desde hostal_users
+    // Cargar sesión inicial; rol y nombre vienen de /api/me
     useEffect(() => {
         let isMounted = true;
+
+        async function resolveProfile(authUser: { id: string; email?: string | null }) {
+            const me = await fetchMe();
+            if (!isMounted) return;
+
+            if (me.status === "denied") {
+                // Sesión de Supabase válida pero sin fila activa en hostal_users
+                await supabase.auth.signOut();
+                if (!isMounted) return;
+                setUser(null);
+                setRole(null);
+                setAccessError(NO_ACCESS_MESSAGE);
+                return;
+            }
+
+            if (me.status === "error") {
+                setUser(null);
+                setRole(null);
+                return;
+            }
+
+            setAccessError(null);
+            setUser({
+                id: authUser.id,
+                email: authUser.email ?? null,
+                full_name: me.full_name,
+            });
+            setRole(me.role);
+        }
 
         async function loadSession() {
             setLoading(true);
@@ -76,87 +128,42 @@ export function AuthProvider({ children }: AuthProviderProps) {
                     if (isMounted) {
                         setUser(null);
                         setRole(null);
-                        setLoading(false);
                     }
                     return;
                 }
 
-                // Query hostal_users using supabase_user_id
-                const { data: profile, error: profileError } = await supabase
-                    .from("hostal_users")
-                    .select("role, full_name")
-                    .eq("supabase_user_id", user.id)
-                    .maybeSingle();
-
-                if (profileError) {
-                    console.error("Error cargando perfil hostal_users:", profileError.message);
-                }
-
-                // Usuario autenticado
-                const authUser: AuthUser = {
-                    id: user.id,
-                    email: user.email ?? null,
-                    full_name: profile?.full_name ?? null,
-                };
-
-                const userRole: UserRole | null =
-                    profile?.role && ["superadmin", "recepcion", "housekeeping"].includes(profile.role)
-                        ? (profile.role as UserRole)
-                        : "recepcion"; // por defecto, recepcion
-
-                if (isMounted) {
-                    setUser(authUser);
-                    setRole(userRole);
-                    setLoading(false);
-                }
+                await resolveProfile(user);
             } catch (err) {
                 console.error("Error en loadSession:", err);
                 if (isMounted) {
                     setUser(null);
                     setRole(null);
-                    setLoading(false);
                 }
+            } finally {
+                if (isMounted) setLoading(false);
             }
         }
 
         loadSession();
 
-        // Suscribirse a cambios de auth
+        // Suscribirse a cambios de auth (solo login/logout; la carga inicial ya la hace loadSession)
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
+        } = supabase.auth.onAuthStateChange((event, session) => {
             if (!isMounted) return;
 
-            if (!session?.user) {
+            if (event === "SIGNED_OUT" || !session?.user) {
                 setUser(null);
                 setRole(null);
                 return;
             }
 
-            // Para asegurar full_name, idealmente hacemos fetch
-            (async () => {
-                const { data: profile } = await supabase
-                    .from("hostal_users")
-                    .select("role, full_name")
-                    .eq("supabase_user_id", session.user.id)
-                    .maybeSingle();
-
-                const authUser: AuthUser = {
-                    id: session.user.id,
-                    email: session.user.email ?? null,
-                    full_name: profile?.full_name ?? null
-                };
-
-                const userRole: UserRole | null =
-                    profile?.role && ["superadmin", "recepcion", "housekeeping"].includes(profile.role)
-                        ? (profile.role as UserRole)
-                        : "recepcion";
-
-                if (isMounted) {
-                    setUser(authUser);
-                    setRole(userRole);
-                }
-            })();
+            if (event === "SIGNED_IN") {
+                // Fuera del callback para no bloquear el cliente de Supabase
+                setTimeout(() => {
+                    resolveProfile(session.user);
+                }, 0);
+            }
         });
 
         return () => {
@@ -175,6 +182,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
             if (error) throw error;
             if (!data.user) throw new Error("No user returned after sign in");
+
+            // Verifica en el servidor que el usuario tenga acceso al panel
+            const me = await fetchMe();
+            if (me.status !== "ok") {
+                await supabase.auth.signOut();
+                throw new Error(
+                    me.status === "denied" ? NO_ACCESS_MESSAGE : "No se pudo verificar el acceso al panel"
+                );
+            }
 
             router.push("/panel/libro-dia");
         } catch (e) {
@@ -201,6 +217,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         user,
         role,
         loading,
+        accessError,
         signIn,
         signOut,
     };

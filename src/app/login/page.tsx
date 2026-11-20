@@ -12,7 +12,7 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const [formLoading, setFormLoading] = useState(false);
 
-    const { signIn, user, loading: authLoading } = useAuth();
+    const { signIn, user, loading: authLoading, accessError } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
@@ -106,9 +106,9 @@ export default function LoginPage() {
                         </div>
                     </div>
 
-                    {error && (
+                    {(error || accessError) && (
                         <div className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">
-                            {error}
+                            {error || accessError}
                         </div>
                     )}
 

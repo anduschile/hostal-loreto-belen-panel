@@ -2,19 +2,27 @@
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
-// Función que usa las variables de entorno para crear el cliente de Supabase
+// Cliente de Supabase SOLO para servidor. Usa siempre la service_role.
+// No hay respaldo a la clave anon: si falta la variable, falla con un error claro.
 export function createClient() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    // Puedes usar la service role en el servidor o el ANON KEY.
-    const key =
-        process.env.SUPABASE_SERVICE_ROLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!url || !key) {
+    if (!url) {
         throw new Error(
-            "Faltan variables de entorno de Supabase: NEXT_PUBLIC_SUPABASE_URL y/o SUPABASE keys"
+            "Falta la variable de entorno NEXT_PUBLIC_SUPABASE_URL (requerida por el cliente de servidor de Supabase)."
+        );
+    }
+    if (!key) {
+        throw new Error(
+            "Falta la variable de entorno SUPABASE_SERVICE_ROLE_KEY: el cliente de servidor de Supabase ya no usa la clave anon."
         );
     }
 
-    return createSupabaseClient(url, key);
+    return createSupabaseClient(url, key, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+        },
+    });
 }

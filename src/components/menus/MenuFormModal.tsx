@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Modal from "@/components/Modal";
 import { HostalMenu } from "@/types/hostal";
-import { uploadMenuPhoto } from "@/lib/supabase/storage";
 
 interface Props {
   open: boolean;
