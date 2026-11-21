@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Loader2, AlertTriangle, ArrowLeft, Info } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import {
     OCCUPANCIES, OCCUPANCY_LABELS, DEFAULT_CONDITIONS, emptyRates, toNetRate, withIva,
     type Occupancy, type RateInputMode, type RateTable,
 } from "@/lib/quotes/calc";
+
+// Aviso de demostración. Para quitarlo: poner SHOW_DEMO_RATES_NOTICE en false (o borrar este bloque y su uso).
+const SHOW_DEMO_RATES_NOTICE = true;
+const DEMO_RATES_NOTICE = "Valores de ejemplo cargados para la demostración. Reemplázalos por tus tarifas reales.";
 
 const fmt = (n: number) => n.toLocaleString("es-CL");
 const money = (n: number) => "$" + fmt(n);
@@ -100,6 +104,13 @@ export default function TarifasPage() {
                 <h1 className="text-2xl font-bold text-slate-800">Tarifas de cotización</h1>
                 <p className="text-sm text-slate-500">Internamente se guarda siempre la tarifa <strong>neta</strong> por noche. El descuento por empresa se configura en Empresas.</p>
             </div>
+
+            {SHOW_DEMO_RATES_NOTICE && (
+                <div role="note" className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                    <Info size={16} className="mt-0.5 shrink-0" />
+                    <span>{DEMO_RATES_NOTICE}</span>
+                </div>
+            )}
 
             <section className="bg-white rounded-lg border border-slate-200 p-5 space-y-4">
                 <div className="flex flex-wrap items-center gap-3">
