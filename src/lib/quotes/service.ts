@@ -9,6 +9,11 @@ import {
     type DiscountMode,
     formatQuoteCode,
     nightsBetween,
+    effectiveDates,
+    periodFromDates,
+    validateDates,
+    summarizeDates,
+    OCCUPANCY_LABELS,
     OCCUPANCIES,
     type DiscountType,
     type Occupancy,
@@ -34,7 +39,8 @@ export type QuoteRow = {
     contact_email: string | null;
     check_in: string;
     check_out: string;
-    lines: { occupancy: Occupancy; rooms: number; nights: number; rate_override: number | null }[];
+    /** `dates`: una fecha ISO por noche. Las cotizaciones antiguas no la tienen (usan el rango check_in/check_out). */
+    lines: { occupancy: Occupancy; rooms: number; nights: number; dates?: string[]; rate_override: number | null }[];
     discount_type: DiscountType;
     discount_value: number;
     discount_label: string | null;
@@ -59,7 +65,8 @@ export type QuoteInput = {
     contact_email?: string | null;
     check_in: string;
     check_out: string;
-    lines: { occupancy: Occupancy; rooms: number; rate_override?: number | null }[];
+    /** `dates` opcional: si falta, la línea usa el rango entrada-salida de la cotización. */
+    lines: { occupancy: Occupancy; rooms: number; dates?: string[]; rate_override?: number | null }[];
     /** «ninguno» | «empresa» | «manual». Si falta: «empresa» si la empresa tiene descuento; si no, «ninguno». */
     discount_mode?: DiscountMode;
     /** Solo modo manual */
@@ -85,7 +92,19 @@ export type SendEmailParams = {
     contactName?: string | null;
     code: string;
     pdfBuffer: Buffer;
+    /** Una línea de texto por línea de habitaciones (fechas resumidas y subtotal), para el cuerpo del correo. */
+    lineSummaries?: string[];
 };
+
+const moneyCl = (n: number) => "$" + n.toLocaleString("es-CL");
+
+/** «1 × Doble — Dom y lun, del 6 al 28 de diciembre: 8 noches — $440.000 neto» */
+export function describeLines(quote: QuoteRow, calc: QuoteCalcResult): string[] {
+    return calc.lines.map((l, i) => {
+        const dates = effectiveDates(quote.lines[i] ?? {}, quote.check_in, quote.check_out);
+        return `${l.rooms} × ${OCCUPANCY_LABELS[l.occupancy]} — ${summarizeDates(dates)} — ${moneyCl(l.subtotal)} neto`;
+    });
+}
 
 export interface QuoteDeps {
     repo: QuoteRepo;
@@ -95,11 +114,17 @@ export interface QuoteDeps {
 
 export function validateQuoteInput(input: QuoteInput): string | null {
     if (!input.company_name?.trim()) return "Falta el nombre de la empresa.";
-    if (nightsBetween(input.check_in, input.check_out) <= 0) return "El rango de fechas no es válido.";
-    if (!input.lines?.length) return "Agrega al menos una línea de ocupación.";
+    if (!Array.isArray(input.lines) || !input.lines.length) return "Agrega al menos una línea de ocupación.";
+    const rangeOk = nightsBetween(input.check_in, input.check_out) > 0;
     for (const l of input.lines) {
         if (!OCCUPANCIES.includes(l.occupancy)) return "Ocupación no válida.";
         if (!Number.isInteger(Number(l.rooms)) || Number(l.rooms) < 1) return "La cantidad de habitaciones debe ser 1 o más.";
+        if (l.dates !== undefined && l.dates !== null) {
+            const e = validateDates(l.dates);
+            if (e) return e;
+        } else if (!rangeOk) {
+            return "El rango de fechas no es válido.";
+        }
     }
     return null;
 }
@@ -159,14 +184,21 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
     if (err) throw new Error(err);
 
     const [rates, settings] = await Promise.all([deps.repo.getRates(), deps.repo.getSettings()]);
-    const nights = nightsBetween(input.check_in, input.check_out);
 
-    const rawLines = input.lines.map((l) => ({
-        occupancy: l.occupancy,
-        rooms: Number(l.rooms),
-        nights,
-        rate_override: Number(l.rate_override) > 0 ? Number(l.rate_override) : null,
-    }));
+    // Noches por línea: las propias (`dates`) o, si faltan, las del rango entrada-salida. El servidor
+    // las ordena y cuenta él mismo; cualquier «nights» que mande el navegador se ignora.
+    const rawLines = input.lines.map((l) => {
+        const dates = effectiveDates({ dates: l.dates }, input.check_in, input.check_out);
+        return {
+            occupancy: l.occupancy,
+            rooms: Number(l.rooms),
+            nights: dates.length,
+            dates,
+            rate_override: Number(l.rate_override) > 0 ? Number(l.rate_override) : null,
+        };
+    });
+    // check_in = fecha mínima; check_out = fecha máxima + 1 día (la tabla exige check_out > check_in)
+    const period = periodFromDates(rawLines.flatMap((l) => l.dates))!;
     // 1) bruto sin descuento (sirve para validar el monto fijo)
     const base = calculateQuote({ lines: rawLines, rates });
     if (base.has_missing_rates) {
@@ -187,8 +219,8 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
         company_rut: input.company_rut?.trim() || null,
         contact_name: input.contact_name?.trim() || null,
         contact_email: input.contact_email?.trim() || null,
-        check_in: input.check_in,
-        check_out: input.check_out,
+        check_in: period.check_in,
+        check_out: period.check_out,
         lines,
         discount_type,
         discount_value,
@@ -252,6 +284,7 @@ export async function sendQuote(deps: QuoteDeps, id: number, opts: { toEmail?: s
         contactName: quote.contact_name,
         code,
         pdfBuffer,
+        lineSummaries: describeLines(quote, calc),
     });
 
     // Modo simulado: el correo NO salió, así que la cotización NO pasa a «enviada».

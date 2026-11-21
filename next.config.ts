@@ -2,11 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  // El PDF de cotizaciones lee public/logo-pagina.png con fs; en Vercel serverless los archivos de
+  // El PDF de cotizaciones lee public/logo-pdf.png (copia optimizada del logo) con fs; en Vercel serverless los archivos de
   // public/ no van dentro de la función a menos que se incluyan explícitamente.
   outputFileTracingIncludes: {
-    "/api/quotes/[id]/pdf": ["./public/logo-pagina.png"],
-    "/api/quotes/[id]/send": ["./public/logo-pagina.png"],
+    "/api/quotes/[id]/pdf": ["./public/logo-pdf.png"],
+    "/api/quotes/[id]/send": ["./public/logo-pdf.png"],
   },
   typescript: {
     ignoreBuildErrors: true,

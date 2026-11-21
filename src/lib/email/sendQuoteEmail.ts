@@ -12,7 +12,10 @@ export function isQuoteEmailLive() {
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
-export function buildQuoteEmail({ toEmail, contactName, code, pdfBuffer }: SendEmailParams) {
+export function buildQuoteEmail({ toEmail, contactName, code, pdfBuffer, lineSummaries }: SendEmailParams) {
+    const linesHtml = lineSummaries?.length
+        ? `<tr><td style="padding:0 24px 16px 24px;color:#374151;font-size:14px;line-height:1.6;"><strong>Detalle:</strong><ul style="margin:6px 0 0 18px;padding:0;">${lineSummaries.map((s) => `<li>${esc(s)}</li>`).join("")}</ul></td></tr>`
+        : "";
     return {
         from: QUOTE_FROM,
         replyTo: QUOTE_REPLY_TO,
@@ -27,6 +30,7 @@ export function buildQuoteEmail({ toEmail, contactName, code, pdfBuffer }: SendE
       Estimado/a <strong>${esc(contactName || "cliente")}</strong>,<br><br>
       Adjuntamos la cotización solicitada. El detalle de fechas, habitaciones y montos está en el PDF adjunto.
     </td></tr>
+    ${linesHtml}
     <tr><td style="padding:0 24px 24px 24px;color:#6b7280;font-size:13px;line-height:1.6;">
       Ante cualquier duda, puede responder directamente a este correo.<br><br>
       Saludos,<br><strong>Hostal Loreto Belén</strong>

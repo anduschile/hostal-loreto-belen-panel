@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 // Reutiliza los estilos del voucher para mantener la misma imagen.
 import { styles } from "./ReservationVoucher";
-import { discountLabel, formatQuoteCode, OCCUPANCY_LABELS, type QuoteCalcResult } from "../quotes/calc";
+import { discountLabel, effectiveDates, formatRangeText, linesShareDates, summarizeDates, formatQuoteCode, OCCUPANCY_LABELS, type QuoteCalcResult } from "../quotes/calc";
 import type { QuoteRow } from "../quotes/service";
 
 const formatDate = (d?: string | null) => {
@@ -23,13 +23,17 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
     const code = formatQuoteCode(quote.number);
     const conditions = (quote.conditions || "").split("\n").map((s) => s.trim()).filter(Boolean);
     const nights = calc.lines[0]?.nights ?? 0;
+    // Todas las líneas con las mismas noches -> Entrada/Salida/Duración; si no -> «Período: del X al Y»
+    const shared = linesShareDates(quote.lines, quote.check_in, quote.check_out);
+    const allDates = quote.lines.flatMap((l) => effectiveDates(l, quote.check_in, quote.check_out)).sort();
+    const periodText = allDates.length ? formatRangeText(allDates[0], allDates[allDates.length - 1]) : "-";
 
     return (
         <Document>
             <Page size="A4" style={styles.page}>
                 <View style={styles.header}>
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        {logo ? <Image src={logo} style={{ width: 44, height: 44, marginRight: 10 }} /> : null}
+                        {logo ? <Image src={logo} style={{ width: 121, height: 44, marginRight: 10, objectFit: "contain" }} /> : null}
                         <View>
                             <Text style={styles.title}>Hostal Loreto Belén</Text>
                             <Text style={styles.subtitle}>Cotización</Text>
@@ -50,9 +54,15 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Detalle de la estadía</Text>
-                    <View style={styles.row}><Text style={styles.label}>Entrada (Check-in):</Text><Text style={styles.value}>{formatDate(quote.check_in)}</Text></View>
-                    <View style={styles.row}><Text style={styles.label}>Salida (Check-out):</Text><Text style={styles.value}>{formatDate(quote.check_out)}</Text></View>
-                    <View style={styles.row}><Text style={styles.label}>Duración:</Text><Text style={styles.value}>{nights} {nights === 1 ? "Noche" : "Noches"}</Text></View>
+                    {shared ? (
+                        <>
+                            <View style={styles.row}><Text style={styles.label}>Entrada (Check-in):</Text><Text style={styles.value}>{formatDate(quote.check_in)}</Text></View>
+                            <View style={styles.row}><Text style={styles.label}>Salida (Check-out):</Text><Text style={styles.value}>{formatDate(quote.check_out)}</Text></View>
+                            <View style={styles.row}><Text style={styles.label}>Duración:</Text><Text style={styles.value}>{nights} {nights === 1 ? "Noche" : "Noches"}</Text></View>
+                        </>
+                    ) : (
+                        <View style={styles.row}><Text style={styles.label}>Período:</Text><Text style={styles.value}>{periodText}</Text></View>
+                    )}
                     <View style={styles.row}><Text style={styles.label}>Vigencia:</Text><Text style={styles.value}>{quote.validity_days} días{quote.valid_until ? ` (hasta el ${formatDate(quote.valid_until)})` : ""}</Text></View>
                 </View>
 
@@ -63,9 +73,12 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
                         <Text style={col.rate}>Neto/noche</Text><Text style={col.sub}>Subtotal neto</Text>
                     </View>
                     {calc.lines.map((l, i) => (
-                        <View key={i} style={styles.row}>
-                            <Text style={col.occ}>{OCCUPANCY_LABELS[l.occupancy]}</Text><Text style={col.qty}>{l.rooms}</Text><Text style={col.nights}>{l.nights}</Text>
-                            <Text style={col.rate}>{money(l.rate)}</Text><Text style={col.sub}>{money(l.subtotal)}</Text>
+                        <View key={i} wrap={false} style={{ marginBottom: 5 }}>
+                            <View style={{ flexDirection: "row" }}>
+                                <Text style={col.occ}>{OCCUPANCY_LABELS[l.occupancy]}</Text><Text style={col.qty}>{l.rooms}</Text><Text style={col.nights}>{l.nights}</Text>
+                                <Text style={col.rate}>{money(l.rate)}</Text><Text style={col.sub}>{money(l.subtotal)}</Text>
+                            </View>
+                            <Text style={{ fontSize: 8.5, color: "#666", marginTop: 1 }}>{summarizeDates(effectiveDates(quote.lines[i] ?? {}, quote.check_in, quote.check_out))}</Text>
                         </View>
                     ))}
                 </View>

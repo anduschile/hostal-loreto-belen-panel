@@ -7,7 +7,7 @@ import type { QuoteRow } from "../quotes/service";
 
 async function loadLogo(): Promise<Buffer | null> {
     try {
-        return await readFile(path.join(process.cwd(), "public", "logo-pagina.png"));
+        return await readFile(path.join(process.cwd(), "public", "logo-pdf.png"));
     } catch {
         return null; // sin logo el PDF igual se genera
     }

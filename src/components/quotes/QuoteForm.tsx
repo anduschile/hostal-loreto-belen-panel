@@ -5,7 +5,8 @@ import { Trash2, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import RangeCalendar from "@/components/quotes/RangeCalendar";
 import {
-    COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, OCCUPANCIES, OCCUPANCY_LABELS, calculateQuote, discountLabel, nightsBetween, normalizeDiscountType,
+    COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, MAX_NIGHTS_PER_LINE, OCCUPANCIES, OCCUPANCY_LABELS, addDays, calculateQuote, discountLabel,
+    effectiveDates, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, summarizeDates, validateDates, weekdayOf,
     type DiscountMode, type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
 import type { QuoteRow } from "@/lib/quotes/service";
@@ -16,7 +17,40 @@ export type FormCompany = {
 };
 export type FormSettings = { validity_days: number; validity_provisional: boolean; default_conditions: string };
 
-type FormLine = { occupancy: Occupancy; rooms: string; rate: string }; // rate "" -> usa la tabla
+/**
+ * Línea de habitaciones. `dates` (una fecha por noche) es la fuente de verdad; los controles de
+ * «Rango» y «Recurrente» solo la regeneran cuando el usuario los cambia (así editar no altera fechas guardadas).
+ */
+type FormLine = {
+    occupancy: Occupancy; rooms: string; rate: string; // rate "" -> usa la tabla
+    mode: "rango" | "recurrente";
+    rStart: string; rEnd: string;                      // modo Rango: entrada y salida de la línea
+    weekdays: number[]; from: string; to: string;      // modo Recurrente (0 = domingo)
+    dates: string[];
+};
+
+const WEEKDAY_BUTTONS: { n: number; label: string; title: string }[] = [
+    { n: 1, label: "L", title: "Lunes" }, { n: 2, label: "M", title: "Martes" }, { n: 3, label: "X", title: "Miércoles" },
+    { n: 4, label: "J", title: "Jueves" }, { n: 5, label: "V", title: "Viernes" }, { n: 6, label: "S", title: "Sábado" }, { n: 0, label: "D", title: "Domingo" },
+];
+
+const blankLine = (rangeStart = "", rangeEnd = ""): FormLine => ({
+    occupancy: "doble", rooms: "1", rate: "", mode: "rango", rStart: rangeStart, rEnd: rangeEnd,
+    weekdays: [], from: "", to: "", dates: rangeDates(rangeStart, rangeEnd),
+});
+
+/** Línea guardada -> estado del formulario. Líneas antiguas (sin dates) usan el rango de la cotización. */
+function lineFromRow(l: QuoteRow["lines"][number], q: QuoteRow): FormLine {
+    const dates = effectiveDates(l, q.check_in, q.check_out);
+    const first = dates[0] ?? "", last = dates[dates.length - 1] ?? "";
+    const contiguous = dates.length > 0 && dates.length === rangeDates(first, addDays(last, 1)).length;
+    return {
+        occupancy: l.occupancy, rooms: String(l.rooms), rate: l.rate_override ? String(l.rate_override) : "",
+        mode: contiguous || dates.length === 0 ? "rango" : "recurrente",
+        rStart: first, rEnd: first ? addDays(last, 1) : "",
+        weekdays: Array.from(new Set(dates.map(weekdayOf))), from: first, to: last, dates,
+    };
+}
 
 const money = (n: number) => "$" + n.toLocaleString("es-CL");
 
@@ -71,19 +105,18 @@ export default function QuoteForm({
     const [rut, setRut] = useState(q?.company_rut ?? "");
     const [contact, setContact] = useState(q?.contact_name ?? "");
     const [email, setEmail] = useState(q?.contact_email ?? "");
-    const [start, setStart] = useState(q?.check_in ?? "");
-    const [end, setEnd] = useState(q?.check_out ?? "");
+    // Calendario general: OPCIONAL. Si se usa, rellena las líneas que aún no tienen fechas y las líneas nuevas.
+    const [start, setStart] = useState("");
+    const [end, setEnd] = useState("");
+    const [showCalendar, setShowCalendar] = useState(false);
     const [lines, setLines] = useState<FormLine[]>(
-        q?.lines?.length
-            ? q.lines.map((l) => ({ occupancy: l.occupancy, rooms: String(l.rooms), rate: l.rate_override ? String(l.rate_override) : "" }))
-            : [{ occupancy: "doble", rooms: "1", rate: "" }]
+        q?.lines?.length ? q.lines.map((l) => lineFromRow(l, q)) : [blankLine()]
     );
     const [validity, setValidity] = useState(String(q?.validity_days ?? settings.validity_days));
     const [conditions, setConditions] = useState(q?.conditions ?? settings.default_conditions);
     const [saving, setSaving] = useState(false);
 
     const company = companies.find((c) => String(c.id) === companyId);
-    const nights = nightsBetween(start, end);
     const companyHasDiscount = !!company && normalizeDiscountType(company.discount_type) !== "ninguno" && Number(company.discount_value) > 0;
 
     // ---- Descuento: «Sin descuento» / «De la empresa» / «Manual» ----
@@ -96,15 +129,15 @@ export default function QuoteForm({
     const effMode: DiscountMode = discMode === "empresa" && !companyHasDiscount ? "ninguno" : discMode;
     const eff = effectiveDiscount(effMode, company, manType, manValue, manReason);
 
-    const rawLines = lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), nights, rate_override: l.rate === "" ? null : Number(l.rate) }));
-    const gross = useMemo(() => calculateQuote({ lines: rawLines, rates }).gross, [lines, rates, nights]); // eslint-disable-line react-hooks/exhaustive-deps
+    const rawLines = lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), nights: l.dates.length, dates: l.dates, rate_override: l.rate === "" ? null : Number(l.rate) }));
+    const gross = useMemo(() => calculateQuote({ lines: rawLines, rates }).gross, [lines, rates]); // eslint-disable-line react-hooks/exhaustive-deps
     const discountError = effMode === "manual" ? manualDiscountError(manType, manValue, gross) : null;
 
     const calc = useMemo(() => calculateQuote({
         lines: rawLines, rates,
         discount_type: discountError ? "ninguno" : eff.type,
         discount_value: discountError ? 0 : eff.value,
-    }), [lines, rates, nights, eff.type, eff.value, discountError]); // eslint-disable-line react-hooks/exhaustive-deps
+    }), [lines, rates, eff.type, eff.value, discountError]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const onCompany = (id: string) => {
         setCompanyId(id);
@@ -116,10 +149,37 @@ export default function QuoteForm({
     };
     const setLine = (i: number, patch: Partial<FormLine>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
 
+    // Cambios en los controles de fechas de una línea: regeneran `dates`.
+    const setRange = (i: number, rStart: string, rEnd: string) => setLine(i, { mode: "rango", rStart, rEnd, dates: rangeDates(rStart, rEnd) });
+    const setRecurring = (i: number, patch: Partial<Pick<FormLine, "weekdays" | "from" | "to">>) => {
+        const l = lines[i];
+        const next = { weekdays: l.weekdays, from: l.from, to: l.to, ...patch };
+        setLine(i, { mode: "recurrente", ...next, dates: recurringDates(next.from, next.to, next.weekdays) });
+    };
+    const toggleWeekday = (i: number, n: number) => {
+        const w = lines[i].weekdays;
+        setRecurring(i, { weekdays: w.includes(n) ? w.filter((x) => x !== n) : [...w, n] });
+    };
+    const setLineMode = (i: number, mode: "rango" | "recurrente") => {
+        const l = lines[i];
+        // al cambiar de modo se regenera desde los datos de ese modo (si los hay); si no, se conservan las fechas actuales
+        if (mode === "rango" && l.rStart && l.rEnd) setRange(i, l.rStart, l.rEnd);
+        else if (mode === "recurrente" && l.from && l.to && l.weekdays.length) setRecurring(i, {});
+        else setLine(i, { mode });
+    };
+    // Calendario general (opcional): rellena las líneas sin fechas
+    const onGeneralRange = (s: string, e: string) => {
+        setStart(s); setEnd(e);
+        if (s && e) setLines(lines.map((l) => (l.dates.length === 0 ? { ...l, mode: "rango", rStart: s, rEnd: e, dates: rangeDates(s, e) } : l)));
+    };
+    const lineErrors = lines.map((l) => (l.dates.length === 0 ? "Elige las fechas de esta línea." : validateDates(l.dates)));
+    const hasLineErrors = lineErrors.some(Boolean);
+
     const submit = async (andSend: boolean) => {
         if (andSend && !email.trim()) return toast.error("Ingresa el correo del contacto para enviar.");
         if (calc.has_missing_rates) return toast.error("Hay líneas con «tarifa sin cargar»: escribe la tarifa a mano.");
         if (discountError) return toast.error(discountError);
+        if (hasLineErrors) return toast.error(lineErrors.find(Boolean)!);
         setSaving(true);
         try {
             const editing = mode === "edit" && q;
@@ -127,9 +187,9 @@ export default function QuoteForm({
                 method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     company_id: company?.id ?? null, company_name: companyName, company_rut: rut, contact_name: contact, contact_email: email,
-                    check_in: start, check_out: end, validity_days: Number(validity), conditions,
+                    ...(periodFromDates(lines.flatMap((l) => l.dates)) ?? { check_in: "", check_out: "" }), validity_days: Number(validity), conditions,
                     discount_mode: effMode, discount_type: manType, discount_value: Number(manValue) || 0, discount_reason: manReason,
-                    lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), rate_override: l.rate === "" ? null : Number(l.rate) })),
+                    lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), dates: l.dates, rate_override: l.rate === "" ? null : Number(l.rate) })),
                 }),
             });
             const json = await res.json();
@@ -175,36 +235,87 @@ export default function QuoteForm({
                         <div className="md:col-span-2"><label className="text-xs text-slate-500">Correo</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} /></div>
                     </section>
 
-                    <section className="flex flex-col md:flex-row gap-5">
-                        <RangeCalendar start={start} end={end} onChange={(s, e) => { setStart(s); setEnd(e); }} />
-                        <div className="text-sm text-slate-600 space-y-1">
-                            <div>Entrada: <strong>{start || "—"}</strong></div>
-                            <div>Salida: <strong>{end || "— (elige la fecha de salida)"}</strong></div>
-                            <div>Noches: <strong>{nights}</strong></div>
-                        </div>
+                    <section className="space-y-2">
+                        <button type="button" onClick={() => setShowCalendar(!showCalendar)} className="text-sm text-emerald-600 hover:underline">
+                            {showCalendar ? "Ocultar calendario general" : "Usar un calendario general (opcional)"}
+                        </button>
+                        {showCalendar && (
+                            <div className="flex flex-col md:flex-row gap-5">
+                                <RangeCalendar start={start} end={end} onChange={onGeneralRange} />
+                                <div className="text-sm text-slate-600 space-y-1">
+                                    <div>Entrada: <strong>{start || "—"}</strong></div>
+                                    <div>Salida: <strong>{end || "— (elige la fecha de salida)"}</strong></div>
+                                    <p className="text-xs text-slate-400 max-w-56">Rellena las líneas que aún no tienen fechas y las líneas nuevas. Cada línea se puede cambiar por separado.</p>
+                                </div>
+                            </div>
+                        )}
                     </section>
 
-                    <section className="space-y-2">
+                    <section className="space-y-3">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-semibold text-slate-700">Habitaciones</h3>
-                            <button type="button" onClick={() => setLines([...lines, { occupancy: "doble", rooms: "1", rate: "" }])} className="text-sm text-emerald-600 hover:underline">+ Agregar línea</button>
+                            <button type="button" onClick={() => setLines([...lines, blankLine(start && end ? start : "", start && end ? end : "")])} className="text-sm text-emerald-600 hover:underline">+ Agregar línea</button>
                         </div>
                         {lines.map((l, i) => {
                             const r = calc.lines[i];
+                            const tooMany = l.dates.length > MAX_NIGHTS_PER_LINE;
                             return (
-                                <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                                    <div className="col-span-3"><label className="text-xs text-slate-500">Ocupación</label>
-                                        <select value={l.occupancy} onChange={(e) => setLine(i, { occupancy: e.target.value as Occupancy, rate: "" })} className={input}>
-                                            {OCCUPANCIES.map((o) => <option key={o} value={o}>{OCCUPANCY_LABELS[o]}</option>)}
-                                        </select></div>
-                                    <div className="col-span-2"><label className="text-xs text-slate-500">Habitaciones</label><input type="number" min={1} value={l.rooms} onChange={(e) => setLine(i, { rooms: e.target.value })} className={input} /></div>
-                                    <div className="col-span-2"><label className="text-xs text-slate-500">Noches</label><input readOnly value={nights} className={input + " bg-slate-50"} /></div>
-                                    <div className="col-span-3"><label className="text-xs text-slate-500">Neto / noche</label>
-                                        <input type="number" min={0} value={l.rate === "" ? (rates[l.occupancy] || "") : l.rate} placeholder="0"
-                                            onChange={(e) => setLine(i, { rate: e.target.value })} className={input} /></div>
-                                    <div className="col-span-1 text-right text-sm text-slate-600 pb-2">{money(r?.subtotal ?? 0)}</div>
-                                    <button type="button" disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, k) => k !== i))} className="col-span-1 pb-2 text-slate-400 hover:text-red-500 disabled:opacity-30"><Trash2 size={16} /></button>
-                                    {r?.rate_missing && <div className="col-span-12 text-xs text-amber-600 inline-flex items-center gap-1"><AlertTriangle size={13} /> tarifa sin cargar — escríbela a mano</div>}
+                                <div key={i} className="border border-slate-200 rounded-md p-3 space-y-3">
+                                    <div className="grid grid-cols-12 gap-2 items-end">
+                                        <div className="col-span-4"><label className="text-xs text-slate-500">Ocupación</label>
+                                            <select value={l.occupancy} onChange={(e) => setLine(i, { occupancy: e.target.value as Occupancy, rate: "" })} className={input}>
+                                                {OCCUPANCIES.map((o) => <option key={o} value={o}>{OCCUPANCY_LABELS[o]}</option>)}
+                                            </select></div>
+                                        <div className="col-span-3"><label className="text-xs text-slate-500">Habitaciones</label><input type="number" min={1} value={l.rooms} onChange={(e) => setLine(i, { rooms: e.target.value })} className={input} /></div>
+                                        <div className="col-span-3"><label className="text-xs text-slate-500">Neto / noche</label>
+                                            <input type="number" min={0} value={l.rate === "" ? (rates[l.occupancy] || "") : l.rate} placeholder="0"
+                                                onChange={(e) => setLine(i, { rate: e.target.value })} className={input} /></div>
+                                        <button type="button" disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, k) => k !== i))} className="col-span-2 pb-2 text-slate-400 hover:text-red-500 disabled:opacity-30 justify-self-end" title="Quitar línea"><Trash2 size={16} /></button>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-xs text-slate-500">Fechas:</span>
+                                            {(["rango", "recurrente"] as const).map((m) => (
+                                                <label key={m} className="flex items-center gap-1 text-sm">
+                                                    <input type="radio" name={`mode-${i}`} checked={l.mode === m} onChange={() => setLineMode(i, m)} /> {m === "rango" ? "Rango" : "Recurrente"}
+                                                </label>
+                                            ))}
+                                        </div>
+                                        {l.mode === "rango" ? (
+                                            <div className="flex flex-wrap gap-3 items-end">
+                                                <div><label className="text-xs text-slate-500">Entrada</label><input type="date" value={l.rStart} onChange={(e) => setRange(i, e.target.value, l.rEnd)} className={input} /></div>
+                                                <div><label className="text-xs text-slate-500">Salida</label><input type="date" value={l.rEnd} onChange={(e) => setRange(i, l.rStart, e.target.value)} className={input} /></div>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                <div className="flex gap-1" role="group" aria-label="Días de la semana">
+                                                    {WEEKDAY_BUTTONS.map((w) => (
+                                                        <button key={w.n} type="button" title={w.title} aria-pressed={l.weekdays.includes(w.n)} onClick={() => toggleWeekday(i, w.n)}
+                                                            className={`w-9 h-9 rounded-md text-sm font-medium border ${l.weekdays.includes(w.n) ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>{w.label}</button>
+                                                    ))}
+                                                </div>
+                                                <div className="flex flex-wrap gap-3 items-end">
+                                                    <div><label className="text-xs text-slate-500">Desde</label><input type="date" value={l.from} onChange={(e) => setRecurring(i, { from: e.target.value })} className={input} /></div>
+                                                    <div><label className="text-xs text-slate-500">Hasta</label><input type="date" value={l.to} onChange={(e) => setRecurring(i, { to: e.target.value })} className={input} /></div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="text-sm text-slate-700">
+                                            <strong>{l.dates.length} {l.dates.length === 1 ? "noche" : "noches"}</strong>
+                                            {l.dates.length > 0 && <span className="text-slate-500"> — {summarizeDates(l.dates)}</span>}
+                                            <span className="float-right text-slate-800 font-medium">{money(r?.subtotal ?? 0)}</span>
+                                        </div>
+                                        {l.dates.length > 0 && (
+                                            <details className="text-xs text-slate-500">
+                                                <summary className="cursor-pointer">Ver las {l.dates.length} fechas</summary>
+                                                <div className="mt-1 max-h-24 overflow-y-auto">{[...l.dates].sort().join(", ")}</div>
+                                            </details>
+                                        )}
+                                        {(tooMany || (lineErrors[i] && l.dates.length > 0)) && <div className="text-xs text-red-600">{lineErrors[i]}</div>}
+                                        {l.dates.length === 0 && <div className="text-xs text-amber-600">Elige las fechas de esta línea.</div>}
+                                        {r?.rate_missing && <div className="text-xs text-amber-600 inline-flex items-center gap-1"><AlertTriangle size={13} /> tarifa sin cargar — escríbela a mano</div>}
+                                    </div>
                                 </div>
                             );
                         })}
