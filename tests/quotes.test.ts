@@ -140,3 +140,31 @@ test("si el envío falla, la cotización NO queda como enviada", async () => {
     await assert.rejects(() => sendQuote(deps, q.id), /boom/);
     assert.equal(store.get(q.id)!.status, "borrador");
 });
+
+// ---------- descuento: tipo nulo / etiquetas ----------
+import { normalizeDiscountType, discountLabel } from "../src/lib/quotes/calc";
+
+test("discount_type nulo, vacío o desconocido se trata como «ninguno»", () => {
+    for (const v of [null, undefined, "", "monto", "PORCENTAJE"]) assert.equal(normalizeDiscountType(v), "ninguno");
+    assert.equal(normalizeDiscountType("porcentaje"), "porcentaje");
+    assert.equal(normalizeDiscountType("monto_fijo"), "monto_fijo"); // mismo valor que el CHECK de hostal_quotes
+    const r = calculateQuote({ rates, lines: [{ occupancy: "doble", rooms: 1, nights: 1 }], discount_type: null, discount_value: 25 });
+    assert.equal(r.discount, 0);
+    assert.equal(r.net, 55000);
+});
+
+test("etiqueta del descuento indica porcentaje o monto", () => {
+    assert.equal(discountLabel("porcentaje", 25), "Descuento convenio 25%");
+    assert.equal(discountLabel("porcentaje", 12.5), "Descuento convenio 12,5%");
+    assert.match(discountLabel("monto_fijo", 50000), /^Descuento convenio \$50\.000$/);
+    assert.equal(discountLabel(null, 25), "Descuento");
+});
+
+test("crear cotización con empresa de discount_type nulo: sin descuento", async () => {
+    const { deps } = memoryDeps();
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: normalizeDiscountType(null), discount_value: 0 });
+    const q = await createQuote(deps, input);
+    assert.equal(q.discount_type, "ninguno");
+    assert.equal(q.discount, 0);
+    assert.equal(q.net, 330000);
+});

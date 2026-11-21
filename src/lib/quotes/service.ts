@@ -3,6 +3,7 @@
 import {
     addDays,
     calculateQuote,
+    normalizeDiscountType,
     formatQuoteCode,
     nightsBetween,
     OCCUPANCIES,
@@ -111,9 +112,9 @@ export async function createQuote(deps: QuoteDeps, input: QuoteInput): Promise<Q
     const [rates, settings] = await Promise.all([deps.repo.getRates(), deps.repo.getSettings()]);
     const nights = nightsBetween(input.check_in, input.check_out);
 
-    let discount_type: DiscountType = input.discount_type ?? "ninguno";
+    let discount_type: DiscountType = normalizeDiscountType(input.discount_type);
     let discount_value = input.discount_value ?? 0;
-    if (input.company_id && !input.discount_type) {
+    if (input.company_id && discount_type === "ninguno") {
         const d = await deps.repo.getCompanyDiscount(input.company_id);
         if (d) ({ discount_type, discount_value } = d);
     }

@@ -38,7 +38,7 @@ export type QuoteLineResult = {
 export type QuoteCalcInput = {
     lines: QuoteLineInput[];
     rates: RateTable;
-    discount_type?: DiscountType | null;
+    discount_type?: DiscountType | string | null;
     discount_value?: number | null;
 };
 
@@ -68,9 +68,24 @@ export function resolveRate(rates: RateTable, occupancy: Occupancy, override?: n
     return num(rates[occupancy]);
 }
 
-export function calculateDiscount(gross: number, type?: DiscountType | null, value?: number | null): number {
+/** Valor nulo o desconocido -> «ninguno». Los valores válidos coinciden con el CHECK de hostal_quotes. */
+export function normalizeDiscountType(v: unknown): DiscountType {
+    return v === "porcentaje" || v === "monto_fijo" ? v : "ninguno";
+}
+
+/** Texto del descuento para PDF/pantalla: «Descuento convenio 25%» o «Descuento convenio $50.000». */
+export function discountLabel(type?: unknown, value?: number | null): string {
+    const t = normalizeDiscountType(type);
     const v = num(value);
-    if (!type || type === "ninguno" || v <= 0 || gross <= 0) return 0;
+    if (t === "porcentaje" && v > 0) return `Descuento convenio ${Number.isInteger(v) ? v : String(v).replace(".", ",")}%`;
+    if (t === "monto_fijo" && v > 0) return `Descuento convenio $${Math.round(v).toLocaleString("es-CL")}`;
+    return "Descuento";
+}
+
+export function calculateDiscount(gross: number, rawType?: unknown, value?: number | null): number {
+    const type = normalizeDiscountType(rawType);
+    const v = num(value);
+    if (type === "ninguno" || v <= 0 || gross <= 0) return 0;
     if (type === "porcentaje") return Math.round((gross * Math.min(v, 100)) / 100);
     return Math.min(Math.round(v), gross); // monto_fijo: nunca más que el bruto
 }

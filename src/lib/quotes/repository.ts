@@ -1,5 +1,5 @@
 import { createClient } from "../supabase/server";
-import { emptyRates, OCCUPANCIES, DEFAULT_CONDITIONS, DEFAULT_VALIDITY_DAYS, type RateTable } from "./calc";
+import { normalizeDiscountType, emptyRates, OCCUPANCIES, DEFAULT_CONDITIONS, DEFAULT_VALIDITY_DAYS, type RateTable } from "./calc";
 import type { QuoteRepo, QuoteRow, QuoteSettings } from "./service";
 
 const DEFAULT_SETTINGS: QuoteSettings = {
@@ -62,7 +62,7 @@ export const supabaseQuoteRepo: QuoteRepo = {
             .eq("id", companyId)
             .maybeSingle();
         if (error) throw new Error(error.message);
-        return data ? { discount_type: data.discount_type ?? "ninguno", discount_value: Number(data.discount_value) || 0 } : null;
+        return data ? { discount_type: normalizeDiscountType(data.discount_type), discount_value: Number(data.discount_value) || 0 } : null;
     },
     async insertQuote(row) {
         const { data, error } = await createClient().from("hostal_quotes").insert(row).select("*").single();

@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import RangeCalendar from "@/components/quotes/RangeCalendar";
 import {
     OCCUPANCIES, OCCUPANCY_LABELS, DEFAULT_CONDITIONS, DEFAULT_VALIDITY_DAYS, QUOTE_STATUSES,
-    calculateQuote, emptyRates, formatQuoteCode, nightsBetween,
+    calculateQuote, discountLabel, normalizeDiscountType, emptyRates, formatQuoteCode, nightsBetween,
     type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
 
@@ -81,7 +81,7 @@ export default function CotizacionesPage() {
     const calc = useMemo(() => calculateQuote({
         lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), nights, rate_override: l.rate === "" ? null : Number(l.rate) })),
         rates,
-        discount_type: company?.discount_type ?? "ninguno",
+        discount_type: normalizeDiscountType(company?.discount_type),
         discount_value: company?.discount_value ?? 0,
     }), [lines, rates, nights, company]);
 
@@ -253,7 +253,7 @@ export default function CotizacionesPage() {
                                 <div className="bg-slate-50 rounded-lg p-4 text-sm space-y-1 h-fit">
                                     {calc.discount > 0 && (<>
                                         <div className="flex justify-between"><span>Subtotal</span><span>{money(calc.gross)}</span></div>
-                                        <div className="flex justify-between text-emerald-700"><span>Descuento empresa</span><span>-{money(calc.discount)}</span></div>
+                                        <div className="flex justify-between text-emerald-700"><span>{discountLabel(company?.discount_type, company?.discount_value)}</span><span>-{money(calc.discount)}</span></div>
                                     </>)}
                                     <div className="flex justify-between"><span>Neto</span><span>{money(calc.net)}</span></div>
                                     <div className="flex justify-between"><span>IVA (19%)</span><span>{money(calc.iva)}</span></div>

@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 // Reutiliza los estilos del voucher para mantener la misma imagen.
 import { styles } from "./ReservationVoucher";
-import { formatQuoteCode, OCCUPANCY_LABELS, type QuoteCalcResult } from "../quotes/calc";
+import { discountLabel, formatQuoteCode, OCCUPANCY_LABELS, type QuoteCalcResult } from "../quotes/calc";
 import type { QuoteRow } from "../quotes/service";
 
 const formatDate = (d?: string | null) => {
@@ -75,14 +75,14 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
                     <Text style={styles.sectionTitle}>Resumen de montos</Text>
                     {calc.discount > 0 && (
                         <>
-                            <View style={styles.row}><Text style={styles.label}>Subtotal:</Text><Text style={styles.value}>{money(calc.gross)}</Text></View>
-                            <View style={styles.row}><Text style={styles.label}>Descuento:</Text><Text style={styles.value}>-{money(calc.discount)}</Text></View>
+                            <View style={styles.row}><Text style={[styles.label, { width: 170 }]}>Subtotal:</Text><Text style={styles.value}>{money(calc.gross)}</Text></View>
+                            <View style={styles.row}><Text style={[styles.label, { width: 170 }]}>{discountLabel(quote.discount_type, quote.discount_value)}:</Text><Text style={styles.value}>-{money(calc.discount)}</Text></View>
                         </>
                     )}
-                    <View style={styles.row}><Text style={styles.label}>Neto:</Text><Text style={styles.value}>{money(calc.net)}</Text></View>
-                    <View style={styles.row}><Text style={styles.label}>IVA (19%):</Text><Text style={styles.value}>{money(calc.iva)}</Text></View>
+                    <View style={styles.row}><Text style={[styles.label, { width: 170 }]}>Neto:</Text><Text style={styles.value}>{money(calc.net)}</Text></View>
+                    <View style={styles.row}><Text style={[styles.label, { width: 170 }]}>IVA (19%):</Text><Text style={styles.value}>{money(calc.iva)}</Text></View>
                     <View style={[styles.row, { marginTop: 4 }]}>
-                        <Text style={[styles.label, { fontSize: 12 }]}>Total c/ IVA:</Text>
+                        <Text style={[styles.label, { width: 170, fontSize: 12 }]}>Total c/ IVA:</Text>
                         <Text style={[styles.value, { fontSize: 12, fontWeight: "bold" }]}>{money(calc.total)} CLP</Text>
                     </View>
                 </View>
