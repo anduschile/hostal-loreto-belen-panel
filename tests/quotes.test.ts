@@ -1,0 +1,142 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { calculateQuote, nightsBetween, formatQuoteCode, type RateTable } from "../src/lib/quotes/calc";
+import { createQuote, sendQuote, type QuoteDeps, type QuoteRow } from "../src/lib/quotes/service";
+import { generateQuotePdfBuffer } from "../src/lib/pdf/generateQuotePdf";
+import { sendQuoteEmail, buildQuoteEmail } from "../src/lib/email/sendQuoteEmail";
+
+const rates: RateTable = { single: 40000, doble: 55000, triple: 70000, cuadruple: 85000 };
+
+// ---------- cálculo ----------
+test("neto, IVA 19% sumado al neto y total", () => {
+    const r = calculateQuote({ rates, lines: [{ occupancy: "doble", rooms: 2, nights: 3 }] });
+    assert.equal(r.net, 330000);
+    assert.equal(r.iva, 62700);
+    assert.equal(r.total, 392700);
+    assert.equal(r.has_missing_rates, false);
+});
+
+test("varias líneas suman", () => {
+    const r = calculateQuote({ rates, lines: [{ occupancy: "single", rooms: 1, nights: 2 }, { occupancy: "triple", rooms: 1, nights: 2 }] });
+    assert.equal(r.net, 80000 + 140000);
+});
+
+test("descuento porcentaje se aplica antes del IVA", () => {
+    const r = calculateQuote({ rates, lines: [{ occupancy: "doble", rooms: 1, nights: 10 }], discount_type: "porcentaje", discount_value: 10 });
+    assert.equal(r.gross, 550000);
+    assert.equal(r.discount, 55000);
+    assert.equal(r.net, 495000);
+    assert.equal(r.iva, Math.round(495000 * 0.19));
+    assert.equal(r.total, r.net + r.iva);
+});
+
+test("descuento monto fijo no supera el bruto", () => {
+    const r = calculateQuote({ rates, lines: [{ occupancy: "single", rooms: 1, nights: 1 }], discount_type: "monto_fijo", discount_value: 999999 });
+    assert.equal(r.net, 0);
+    assert.equal(r.total, 0);
+});
+
+test("tarifa en cero se marca; la tarifa manual la reemplaza", () => {
+    const zero: RateTable = { ...rates, doble: 0 };
+    const missing = calculateQuote({ rates: zero, lines: [{ occupancy: "doble", rooms: 1, nights: 2 }] });
+    assert.equal(missing.has_missing_rates, true);
+    assert.equal(missing.lines[0].rate_missing, true);
+    assert.equal(missing.net, 0);
+
+    const manual = calculateQuote({ rates: zero, lines: [{ occupancy: "doble", rooms: 1, nights: 2, rate_override: 60000 }] });
+    assert.equal(manual.has_missing_rates, false);
+    assert.equal(manual.net, 120000);
+});
+
+test("noches y código correlativo", () => {
+    assert.equal(nightsBetween("2026-12-01", "2026-12-04"), 3);
+    assert.equal(nightsBetween("2026-12-04", "2026-12-01"), 0);
+    assert.equal(formatQuoteCode(7), "COT-0007");
+});
+
+// ---------- flujo crear -> PDF -> enviar (simulado) ----------
+function memoryDeps() {
+    const store = new Map<number, QuoteRow>();
+    let seq = 0;
+    const deps: QuoteDeps = {
+        repo: {
+            getRates: async () => rates,
+            getSettings: async () => ({ validity_days: 7, validity_provisional: true, mode: "revision", default_conditions: "Habitaciones con baño privado.\nIncluye desayuno." }),
+            getCompanyDiscount: async (id) => (id === 1 ? { discount_type: "porcentaje", discount_value: 10 } : null),
+            insertQuote: async (row) => { const q = { ...row, id: ++seq, number: seq } as QuoteRow; store.set(q.id, q); return q; },
+            getQuote: async (id) => store.get(id) ?? null,
+            updateQuote: async (id, patch) => { const q = { ...store.get(id)!, ...patch }; store.set(id, q); return q; },
+        },
+        renderPdf: (q, calc) => generateQuotePdfBuffer(q, calc),
+        sendEmail: sendQuoteEmail,
+    };
+    return { deps, store };
+}
+
+const input = {
+    company_id: 1, company_name: "Empresa Test", company_rut: "76.123.456-7", contact_name: "Ana", contact_email: "ana@example.com",
+    check_in: "2026-12-01", check_out: "2026-12-04", lines: [{ occupancy: "doble" as const, rooms: 2 }],
+};
+
+test("crear cotización: totales recalculados en servidor con descuento de empresa", async () => {
+    const { deps } = memoryDeps();
+    const q = await createQuote(deps, input);
+    assert.equal(q.status, "borrador");
+    assert.equal(formatQuoteCode(q.number), "COT-0001");
+    assert.equal(q.gross, 330000);
+    assert.equal(q.net, 297000);
+    assert.equal(q.total, 297000 + Math.round(297000 * 0.19));
+    assert.equal(q.validity_days, 7);
+});
+
+test("crear rechaza tarifa sin cargar", async () => {
+    const { deps } = memoryDeps();
+    deps.repo.getRates = async () => ({ ...rates, doble: 0 });
+    await assert.rejects(() => createQuote(deps, input), /tarifa sin cargar/);
+});
+
+test("crear + PDF + enviar en modo simulado", async () => {
+    delete process.env.QUOTES_EMAIL_MODE; // por defecto: simulado
+    const { deps, store } = memoryDeps();
+    const q = await createQuote(deps, input);
+    const r = await sendQuote(deps, q.id);
+    assert.equal(r.simulated, true);
+    assert.ok(r.pdfBytes > 1000);
+    // simulado: el correo NO salió -> NO debe quedar «enviada»
+    assert.equal(store.get(q.id)!.status, "borrador");
+    assert.equal(store.get(q.id)!.sent_at, null);
+});
+
+test("envío real (no simulado) sí marca «enviada»", async () => {
+    const { deps, store } = memoryDeps();
+    deps.sendEmail = async () => ({ simulated: false });
+    const q = await createQuote(deps, input);
+    const r = await sendQuote(deps, q.id);
+    assert.equal(r.simulated, false);
+    assert.equal(store.get(q.id)!.status, "enviada");
+    assert.ok(store.get(q.id)!.sent_at);
+});
+
+test("PDF generado es un PDF válido", async () => {
+    const { deps } = memoryDeps();
+    const q = await createQuote(deps, input);
+    const buf = await generateQuotePdfBuffer(q, (await import("../src/lib/quotes/service")).calcForRow(q, rates));
+    assert.equal(buf.subarray(0, 5).toString(), "%PDF-");
+});
+
+test("correo: asunto, remitente, cierre y adjunto", () => {
+    const e = buildQuoteEmail({ toEmail: "a@b.cl", code: "COT-0001", contactName: "Ana", pdfBuffer: Buffer.from("x") });
+    assert.equal(e.subject, "Cotización Hostal Loreto Belén (COT-0001)");
+    assert.equal(e.from, "Hostal Loreto Belén <reservas@loretobelen.cl>");
+    assert.match(e.html, /Saludos,/);
+    assert.ok(!e.html.includes('href="#"'));
+    assert.equal(e.attachments[0].filename, "cotizacion_COT-0001.pdf");
+});
+
+test("si el envío falla, la cotización NO queda como enviada", async () => {
+    const { deps, store } = memoryDeps();
+    deps.sendEmail = async () => { throw new Error("boom"); };
+    const q = await createQuote(deps, input);
+    await assert.rejects(() => sendQuote(deps, q.id), /boom/);
+    assert.equal(store.get(q.id)!.status, "borrador");
+});
