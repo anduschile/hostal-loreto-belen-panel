@@ -84,6 +84,11 @@ export const supabaseQuoteRepo: QuoteRepo = {
         if (error) throw new Error(error.message);
         return data as QuoteRow;
     },
+    async deleteQuote(id) {
+        // Guarda extra a nivel de datos: nunca borra algo que no sea borrador.
+        const { error } = await createClient().from("hostal_quotes").delete().eq("id", id).eq("status", "borrador");
+        if (error) throw new Error(error.message);
+    },
 };
 
 export async function listQuotes(): Promise<QuoteRow[]> {

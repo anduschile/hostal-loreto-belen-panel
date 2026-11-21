@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth/server";
 import { supabaseQuoteRepo } from "@/lib/quotes/repository";
+import { deleteQuoteDraft, updateQuoteDraft } from "@/lib/quotes/service";
+import { quoteDeps } from "@/lib/quotes/deps";
 import { QUOTE_STATUSES } from "@/lib/quotes/calc";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +20,18 @@ export async function GET(_req: Request, { params }: Params) {
     }
 }
 
+// Edición completa: solo borradores. Los totales se recalculan en el servidor.
+export async function PUT(req: Request, { params }: Params) {
+    const auth = await requireUser();
+    if ("response" in auth) return auth.response;
+    try {
+        const q = await updateQuoteDraft(quoteDeps, Number((await params).id), await req.json());
+        return NextResponse.json({ ok: true, data: q });
+    } catch (e: any) {
+        return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
+    }
+}
+
 // Cambio de estado manual (aceptada / rechazada / vencida...)
 export async function PATCH(req: Request, { params }: Params) {
     const auth = await requireUser();
@@ -27,6 +41,18 @@ export async function PATCH(req: Request, { params }: Params) {
         if (!QUOTE_STATUSES.includes(status)) throw new Error("Estado no válido.");
         const q = await supabaseQuoteRepo.updateQuote(Number((await params).id), { status });
         return NextResponse.json({ ok: true, data: q });
+    } catch (e: any) {
+        return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
+    }
+}
+
+// Solo borradores.
+export async function DELETE(_req: Request, { params }: Params) {
+    const auth = await requireUser();
+    if ("response" in auth) return auth.response;
+    try {
+        await deleteQuoteDraft(quoteDeps, Number((await params).id));
+        return NextResponse.json({ ok: true });
     } catch (e: any) {
         return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
     }

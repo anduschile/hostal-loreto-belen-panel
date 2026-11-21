@@ -43,6 +43,7 @@ async function handlers() {
     const quote = await import("../src/app/api/quotes/[id]/route");
     const send = await import("../src/app/api/quotes/[id]/send/route");
     const ctx = await import("../src/app/api/quotes/context/route");
+    const pdf = await import("../src/app/api/quotes/[id]/pdf/route");
     return {
         admin: {
             "GET quote-rates": () => rates.GET(), "PUT quote-rates": () => rates.PUT(req({ doble: 1 })),
@@ -53,6 +54,8 @@ async function handlers() {
             "GET quotes/context": () => ctx.GET(),
             "GET quotes/[id]": () => quote.GET(req(), params), "PATCH quotes/[id]": () => quote.PATCH(req({ status: "aceptada" }), params),
             "POST quotes/[id]/send": () => send.POST(req(), params),
+            "PUT quotes/[id]": () => quote.PUT(req({}), params), "DELETE quotes/[id]": () => quote.DELETE(req(), params),
+            "GET quotes/[id]/pdf": () => pdf.GET(req(), params),
         } as Record<string, () => Promise<Response>>,
     };
 }

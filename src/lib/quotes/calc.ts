@@ -57,6 +57,19 @@ const num = (v: unknown) => {
     return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
+export type RateInputMode = "con_iva" | "neto";
+
+/** Valor ingresado -> neto a guardar (net_rate). Con IVA: round(valor / 1.19). */
+export function toNetRate(value: number, mode: RateInputMode): number {
+    const v = num(value);
+    return mode === "con_iva" ? Math.round(v / (1 + IVA_RATE)) : Math.round(v);
+}
+
+/** Neto -> valor con IVA incluido (redondeado). */
+export function withIva(net: number): number {
+    return Math.round(num(net) * (1 + IVA_RATE));
+}
+
 export function emptyRates(): RateTable {
     return { single: 0, doble: 0, triple: 0, cuadruple: 0 };
 }

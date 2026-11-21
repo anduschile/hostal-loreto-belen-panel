@@ -66,6 +66,7 @@ function memoryDeps() {
             insertQuote: async (row) => { const q = { ...row, id: ++seq, number: seq } as QuoteRow; store.set(q.id, q); return q; },
             getQuote: async (id) => store.get(id) ?? null,
             updateQuote: async (id, patch) => { const q = { ...store.get(id)!, ...patch }; store.set(id, q); return q; },
+            deleteQuote: async (id) => { store.delete(id); },
         },
         renderPdf: (q, calc) => generateQuotePdfBuffer(q, calc),
         sendEmail: sendQuoteEmail,
@@ -167,4 +168,91 @@ test("crear cotización con empresa de discount_type nulo: sin descuento", async
     assert.equal(q.discount_type, "ninguno");
     assert.equal(q.discount, 0);
     assert.equal(q.net, 330000);
+});
+
+// ---------- edición, eliminación, envío con otro correo, IVA en tarifas ----------
+import { updateQuoteDraft, deleteQuoteDraft } from "../src/lib/quotes/service";
+import { toNetRate, withIva } from "../src/lib/quotes/calc";
+
+test("editar borrador: total recalculado en servidor, conserva número y estado", async () => {
+    const { deps } = memoryDeps();
+    const q = await createQuote(deps, { ...input, company_id: null });
+    const e = await updateQuoteDraft(deps, q.id, { ...input, company_id: null, lines: [{ occupancy: "doble", rooms: 4 }] });
+    assert.equal(e.number, q.number);
+    assert.equal(e.status, "borrador");
+    assert.equal(e.net, 55000 * 4 * 3);
+    assert.equal(e.total, e.net + Math.round(e.net * 0.19));
+});
+
+test("editar: un total mandado por el cliente se ignora", async () => {
+    const { deps } = memoryDeps();
+    const q = await createQuote(deps, { ...input, company_id: null });
+    const e = await updateQuoteDraft(deps, q.id, { ...input, company_id: null, total: 1, net: 1 } as any);
+    assert.equal(e.net, 55000 * 2 * 3);
+});
+
+test("editar no se permite fuera de borrador", async () => {
+    const { deps, store } = memoryDeps();
+    const q = await createQuote(deps, input);
+    for (const st of ["enviada", "aceptada", "rechazada", "vencida"] as const) {
+        store.set(q.id, { ...store.get(q.id)!, status: st });
+        await assert.rejects(() => updateQuoteDraft(deps, q.id, input), /borrador/);
+        await assert.rejects(() => deleteQuoteDraft(deps, q.id), /borrador/);
+    }
+});
+
+test("eliminar borrador funciona", async () => {
+    const { deps, store } = memoryDeps();
+    const q = await createQuote(deps, input);
+    await deleteQuoteDraft(deps, q.id);
+    assert.equal(store.has(q.id), false);
+});
+
+test("la tarifa se congela: cambiar Tarifas después no altera la cotización", async () => {
+    const { deps } = memoryDeps();
+    const q = await createQuote(deps, { ...input, company_id: null });
+    assert.equal(q.lines[0].rate_override, 55000);
+    const later: RateTable = { ...rates, doble: 99999 };
+    const c = (await import("../src/lib/quotes/service")).calcForRow(q, later);
+    assert.equal(c.net, q.net);
+});
+
+test("descuento porcentaje (Acuimag 25%), monto_fijo y nulo en la cotización", async () => {
+    const { deps } = memoryDeps();
+    const base = { ...input, company_id: 6 };
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: "porcentaje", discount_value: 25 });
+    const p = await createQuote(deps, base);
+    assert.equal(p.discount, 82500);          // 25% de 330.000
+    assert.equal(p.net, 247500);
+    assert.ok(p.total < 330000 + Math.round(330000 * 0.19)); // el total baja
+
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: "monto_fijo", discount_value: 50000 });
+    const m = await createQuote(deps, base);
+    assert.equal(m.discount, 50000);
+    assert.equal(m.net, 280000);
+
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: normalizeDiscountType(null), discount_value: 0 });
+    const n = await createQuote(deps, base);
+    assert.equal(n.discount, 0);
+    assert.equal(n.net, 330000);
+});
+
+test("enviar con otro correo: valida, actualiza el destino y no marca enviada si es simulado", async () => {
+    delete process.env.QUOTES_EMAIL_MODE;
+    const { deps, store } = memoryDeps();
+    const q = await createQuote(deps, input);
+    await assert.rejects(() => sendQuote(deps, q.id, { toEmail: "no-es-correo" }), /no es válido/);
+    const r = await sendQuote(deps, q.id, { toEmail: "otro@example.com" });
+    assert.equal(r.simulated, true);
+    assert.equal(store.get(q.id)!.contact_email, "otro@example.com");
+    assert.equal(store.get(q.id)!.status, "borrador");
+});
+
+test("conversión IVA de tarifas: con IVA -> neto = round(valor/1.19); neto se mantiene", () => {
+    assert.equal(toNetRate(119000, "con_iva"), 100000);
+    assert.equal(toNetRate(55000, "con_iva"), 46218);
+    assert.equal(toNetRate(55000, "neto"), 55000);
+    assert.equal(withIva(100000), 119000);
+    // estable: neto -> con IVA -> neto devuelve el mismo neto
+    for (const n of [1, 999, 46218, 50000, 123457]) assert.equal(toNetRate(withIva(n), "con_iva"), n);
 });

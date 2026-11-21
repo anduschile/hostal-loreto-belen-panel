@@ -69,6 +69,7 @@ export interface QuoteRepo {
     insertQuote(row: Omit<QuoteRow, "id" | "number" | "created_at">): Promise<QuoteRow>;
     getQuote(id: number): Promise<QuoteRow | null>;
     updateQuote(id: number, patch: Partial<QuoteRow>): Promise<QuoteRow>;
+    deleteQuote(id: number): Promise<void>;
 }
 
 export type SendEmailParams = {
@@ -104,8 +105,14 @@ export function calcForRow(row: QuoteRow, rates: RateTable): QuoteCalcResult {
     });
 }
 
-/** Crea la cotización en borrador. Los totales SIEMPRE se recalculan en el servidor. */
-export async function createQuote(deps: QuoteDeps, input: QuoteInput): Promise<QuoteRow> {
+type QuoteFields = Omit<QuoteRow, "id" | "number" | "created_at" | "status" | "sent_at">;
+
+/**
+ * Valida y calcula todos los campos de una cotización. Los totales SIEMPRE se calculan en el servidor.
+ * La tarifa efectiva de cada línea se guarda («congelada») en rate_override, para que un cambio
+ * posterior en Tarifas no altere cotizaciones ya hechas.
+ */
+async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<QuoteFields> {
     const err = validateQuoteInput(input);
     if (err) throw new Error(err);
 
@@ -119,21 +126,22 @@ export async function createQuote(deps: QuoteDeps, input: QuoteInput): Promise<Q
         if (d) ({ discount_type, discount_value } = d);
     }
 
-    const lines = input.lines.map((l) => ({
+    const rawLines = input.lines.map((l) => ({
         occupancy: l.occupancy,
         rooms: Number(l.rooms),
         nights,
         rate_override: Number(l.rate_override) > 0 ? Number(l.rate_override) : null,
     }));
-    const calc = calculateQuote({ lines, rates, discount_type, discount_value });
+    const calc = calculateQuote({ lines: rawLines, rates, discount_type, discount_value });
     if (calc.has_missing_rates) {
         throw new Error("Hay líneas con «tarifa sin cargar»: escribe la tarifa a mano o carga las tarifas.");
     }
+    const lines = rawLines.map((l, i) => ({ ...l, rate_override: calc.lines[i].rate })); // tarifa congelada
 
     const validity_days = input.validity_days && input.validity_days > 0 ? input.validity_days : settings.validity_days;
     const today = new Date().toISOString().slice(0, 10);
 
-    return deps.repo.insertQuote({
+    return {
         company_id: input.company_id ?? null,
         company_name: input.company_name.trim(),
         company_rut: input.company_rut?.trim() || null,
@@ -152,16 +160,46 @@ export async function createQuote(deps: QuoteDeps, input: QuoteInput): Promise<Q
         validity_days,
         valid_until: addDays(today, validity_days),
         conditions: input.conditions ?? settings.default_conditions,
-        status: "borrador",
-        sent_at: null,
-    });
+    };
 }
 
-/** Genera el PDF y envía el correo. Solo marca «enviada» si el correo salió de verdad (no simulado ni con error). */
-export async function sendQuote(deps: QuoteDeps, id: number) {
-    const quote = await deps.repo.getQuote(id);
+/** Crea la cotización en borrador. */
+export async function createQuote(deps: QuoteDeps, input: QuoteInput): Promise<QuoteRow> {
+    const fields = await buildQuoteFields(deps, input);
+    return deps.repo.insertQuote({ ...fields, status: "borrador", sent_at: null });
+}
+
+/** Edita una cotización. Solo en borrador; los totales se recalculan en el servidor. */
+export async function updateQuoteDraft(deps: QuoteDeps, id: number, input: QuoteInput): Promise<QuoteRow> {
+    const current = await deps.repo.getQuote(id);
+    if (!current) throw new Error("Cotización no encontrada");
+    if (current.status !== "borrador") throw new Error("Solo se pueden editar cotizaciones en borrador. Usa «Duplicar como nueva».");
+    const fields = await buildQuoteFields(deps, input);
+    return deps.repo.updateQuote(id, fields);
+}
+
+/** Elimina una cotización. Solo en borrador. */
+export async function deleteQuoteDraft(deps: QuoteDeps, id: number): Promise<void> {
+    const current = await deps.repo.getQuote(id);
+    if (!current) throw new Error("Cotización no encontrada");
+    if (current.status !== "borrador") throw new Error("Solo se pueden eliminar cotizaciones en borrador.");
+    await deps.repo.deleteQuote(id);
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Genera el PDF y envía el correo. `toEmail` permite cambiar el destino antes de enviar.
+ * Solo marca «enviada» si el correo salió de verdad (no simulado ni con error).
+ */
+export async function sendQuote(deps: QuoteDeps, id: number, opts: { toEmail?: string } = {}) {
+    let quote = await deps.repo.getQuote(id);
     if (!quote) throw new Error("Cotización no encontrada");
-    if (!quote.contact_email) throw new Error("La cotización no tiene correo de contacto.");
+
+    const target = (opts.toEmail ?? quote.contact_email ?? "").trim();
+    if (!target) throw new Error("La cotización no tiene correo de contacto.");
+    if (!EMAIL_RE.test(target)) throw new Error("El correo de destino no es válido.");
+    if (target !== quote.contact_email) quote = await deps.repo.updateQuote(id, { contact_email: target });
 
     const rates = await deps.repo.getRates();
     const calc = calcForRow(quote, rates);
@@ -169,7 +207,7 @@ export async function sendQuote(deps: QuoteDeps, id: number) {
     const pdfBuffer = await deps.renderPdf(quote, calc);
 
     const result = await deps.sendEmail({
-        toEmail: quote.contact_email,
+        toEmail: target,
         contactName: quote.contact_name,
         code,
         pdfBuffer,
