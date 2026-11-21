@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import {
     LayoutDashboard,
+    FileText,
     CalendarDays,
     NotebookTabs,
     BookOpenCheck,
@@ -28,6 +29,7 @@ const navItems = [
     { label: "Libro del Día", href: "/panel/libro-dia", icon: BookOpenCheck },
     { label: "Huéspedes", href: "/panel/huespedes", icon: Users },
     { label: "Empresas", href: "/panel/empresas", icon: Building2 },
+    { label: "Cotizaciones", href: "/panel/cotizaciones", icon: FileText },
     { label: "Pagos", href: "/panel/pagos", icon: CreditCard },
     { label: "Menús", href: "/panel/menus", icon: UtensilsCrossed },
     { label: "Reportes", href: "/panel/reportes", icon: BarChart3 },

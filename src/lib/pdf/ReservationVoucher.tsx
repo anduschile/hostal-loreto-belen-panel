@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 // Define styles
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
     page: {
         padding: 30,
         fontFamily: 'Helvetica',
