@@ -290,6 +290,81 @@ export function summarizeDates(dates: string[]): string {
     return `${listDatesText(s)}: ${nightsText(n)}`;
 }
 
+// ---------------------------------------------------------------------------
+// Redacción de fechas (detalle, PDF, correo, formulario)
+// ---------------------------------------------------------------------------
+
+const MONTHS_SHORT_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const WEEKDAYS_FULL_ES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+/** «mar 8 dic» (con año si hace falta: «mar 30 dic 2026»). */
+function formatDayShort(iso: string, withYear = false): string {
+    const p = parts(iso);
+    return `${WEEKDAYS_ES[weekdayOf(iso)]} ${p.d} ${MONTHS_SHORT_ES[p.m]}${withYear ? ` ${p.y}` : ""}`;
+}
+
+/**
+ * Cómo se lee una línea según sus noches (el conteo aparece UNA sola vez):
+ *  - noche única:  «Noche del 8 de diciembre»
+ *  - corrida:      «Entrada mar 8 dic → Salida jue 10 dic (2 noches)»
+ *  - recurrente:   «Noches de lunes y martes, del 7 al 29 de diciembre: 8 noches»
+ *  - sueltas:      «Noches del 6, 9 y 13 de diciembre: 3 noches»
+ */
+/** Separador seguro para el PDF: la fuente estándar Helvetica no trae la flecha «→». */
+export const PDF_SAFE_ARROW = "–";
+
+export function describeDates(dates: string[], arrow = "→"): string {
+    if (dates.length === 0) return "";
+    const s = sortDates(dates);
+    const first = s[0], last = s[s.length - 1], n = s.length;
+
+    const contiguous = s.every((d, i) => i === 0 || toMs(d) - toMs(s[i - 1]) === DAY_MS);
+    if (contiguous) {
+        if (n === 1) return `Noche del ${formatDayLong(first)}`;
+        const exit = addDays(last, 1);
+        const withYear = parts(first).y !== parts(exit).y;
+        return `Entrada ${formatDayShort(first, withYear)} ${arrow} Salida ${formatDayShort(exit, withYear)} (${nightsText(n)})`;
+    }
+
+    const wds = Array.from(new Set(s.map(weekdayOf)));
+    const repeatsEach = wds.every((w) => s.filter((d) => weekdayOf(d) === w).length >= 2);
+    if (repeatsEach && recurringDates(first, last, wds).join(",") === s.join(",")) {
+        const names = WEEK_ORDER.filter((w) => wds.includes(w)).map((w) => WEEKDAYS_FULL_ES[w]);
+        return `Noches de ${joinEs(names)}, ${formatRangeText(first, last)}: ${nightsText(n)}`;
+    }
+    return `Noches del ${listDatesText(s)}: ${nightsText(n)}`;
+}
+
+/**
+ * Texto de fechas de una línea ya guardada. Las líneas con `dates` usan la redacción nueva;
+ * las antiguas (sin `dates`) conservan exactamente la redacción de antes.
+ */
+export function describeLine(line: { dates?: string[] | null }, checkIn?: string | null, checkOut?: string | null, arrow = "→"): string {
+    if (Array.isArray(line.dates) && line.dates.length > 0) return describeDates(line.dates, arrow);
+    return summarizeDates(effectiveDates(line, checkIn, checkOut));
+}
+
+/**
+ * Línea de estadía para detalle/correo.
+ *  - todas las líneas comparten noches: «Entrada: 1 de diciembre · Salida: 4 de diciembre · 3 noches»
+ *  - fechas distintas: «Primera noche: 7 de diciembre · Última noche: 29 de diciembre (salida 30 de diciembre)»
+ */
+export function stayText(lines: { dates?: string[] | null }[], checkIn?: string | null, checkOut?: string | null): { shared: boolean; text: string } {
+    const all = lines.flatMap((l) => effectiveDates(l, checkIn, checkOut)).sort();
+    if (all.length === 0) return { shared: true, text: "" };
+    const first = all[0], last = all[all.length - 1], exit = addDays(last, 1);
+    const withYear = parts(first).y !== parts(exit).y;
+    const shared = linesShareDates(lines, checkIn, checkOut);
+    if (shared) {
+        const n = effectiveDates(lines[0], checkIn, checkOut).length;
+        return { shared, text: `Entrada: ${formatDayLong(first, withYear)} · Salida: ${formatDayLong(exit, withYear)} · ${nightsText(n)}` };
+    }
+    return {
+        shared,
+        text: `Primera noche: ${formatDayLong(first, withYear)} · Última noche: ${formatDayLong(last, withYear)} (salida ${formatDayLong(exit, withYear)})`,
+    };
+}
+
 export function formatQuoteCode(n: number): string {
     return `COT-${String(n).padStart(4, "0")}`;
 }

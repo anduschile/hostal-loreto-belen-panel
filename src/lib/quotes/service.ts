@@ -12,7 +12,8 @@ import {
     effectiveDates,
     periodFromDates,
     validateDates,
-    summarizeDates,
+    describeLine,
+    stayText,
     OCCUPANCY_LABELS,
     OCCUPANCIES,
     type DiscountType,
@@ -94,6 +95,8 @@ export type SendEmailParams = {
     pdfBuffer: Buffer;
     /** Una línea de texto por línea de habitaciones (fechas resumidas y subtotal), para el cuerpo del correo. */
     lineSummaries?: string[];
+    /** Línea de estadía: «Entrada · Salida · N noches» o «Primera noche · Última noche (salida …)». */
+    stay?: string;
 };
 
 const moneyCl = (n: number) => "$" + n.toLocaleString("es-CL");
@@ -101,8 +104,7 @@ const moneyCl = (n: number) => "$" + n.toLocaleString("es-CL");
 /** «1 × Doble — Dom y lun, del 6 al 28 de diciembre: 8 noches — $440.000 neto» */
 export function describeLines(quote: QuoteRow, calc: QuoteCalcResult): string[] {
     return calc.lines.map((l, i) => {
-        const dates = effectiveDates(quote.lines[i] ?? {}, quote.check_in, quote.check_out);
-        return `${l.rooms} × ${OCCUPANCY_LABELS[l.occupancy]} — ${summarizeDates(dates)} — ${moneyCl(l.subtotal)} neto`;
+        return `${l.rooms} × ${OCCUPANCY_LABELS[l.occupancy]} — ${describeLine(quote.lines[i] ?? {}, quote.check_in, quote.check_out)} — ${moneyCl(l.subtotal)} neto`;
     });
 }
 
@@ -285,6 +287,7 @@ export async function sendQuote(deps: QuoteDeps, id: number, opts: { toEmail?: s
         code,
         pdfBuffer,
         lineSummaries: describeLines(quote, calc),
+        stay: stayText(quote.lines, quote.check_in, quote.check_out).text,
     });
 
     // Modo simulado: el correo NO salió, así que la cotización NO pasa a «enviada».

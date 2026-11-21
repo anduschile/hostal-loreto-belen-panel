@@ -7,7 +7,7 @@ import { ArrowLeft, Download, Send, Pencil, Copy, Trash2, Loader2 } from "lucide
 import { toast } from "sonner";
 import { STATUS_STYLE } from "@/components/quotes/statusStyle";
 import {
-    OCCUPANCY_LABELS, calculateQuote, discountLabel, effectiveDates, emptyRates, formatQuoteCode, formatRangeText, linesShareDates, normalizeDiscountType, summarizeDates, type RateTable,
+    OCCUPANCY_LABELS, calculateQuote, describeLine, discountLabel, emptyRates, formatQuoteCode, normalizeDiscountType, stayText, type RateTable,
 } from "@/lib/quotes/calc";
 import type { QuoteRow } from "@/lib/quotes/service";
 
@@ -54,9 +54,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
     const calc = calculateQuote({ lines: quote.lines, rates, discount_type: quote.discount_type, discount_value: quote.discount_value });
     const nights = calc.lines[0]?.nights ?? 0;
-    const shared = linesShareDates(quote.lines, quote.check_in, quote.check_out);
-    const allDates = quote.lines.flatMap((l) => effectiveDates(l, quote.check_in, quote.check_out)).sort();
-    const periodText = allDates.length ? formatRangeText(allDates[0], allDates[allDates.length - 1]) : "—";
+    const { shared, text: stay } = stayText(quote.lines, quote.check_in, quote.check_out);
     const isDraft = quote.status === "borrador";
     const code = formatQuoteCode(quote.number);
     const hasDiscount = normalizeDiscountType(quote.discount_type) !== "ninguno" && quote.discount > 0;
@@ -127,7 +125,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
                     <Row label="Entrada">{fmtDate(quote.check_in)}</Row>
                     <Row label="Salida">{fmtDate(quote.check_out)}</Row>
                     <Row label="Noches">{nights}</Row>
-                    </>) : <Row label="Período">{periodText}</Row>}
+                    </>) : <Row label="Estadía">{stay}</Row>}
                     <Row label="Vigencia">{quote.validity_days} días{quote.valid_until ? ` (hasta el ${fmtDate(quote.valid_until)})` : ""}</Row>
                     <Row label="Fecha de envío">{quote.sent_at ? fmtDate(quote.sent_at) : (quote.status === "enviada" || quote.status === "aceptada") ? "Sin envío registrado por el sistema" : "Sin enviar"}</Row>
                 </dl>
@@ -139,7 +137,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
                     <thead className="text-slate-500 text-left"><tr><th className="py-1">Ocupación</th><th>Hab.</th><th>Noches</th><th className="text-right">Neto/noche</th><th className="text-right">Subtotal neto</th></tr></thead>
                     <tbody>
                         {calc.lines.map((l, i) => (
-                            <Fragment key={i}><tr className="border-t border-slate-100"><td className="py-1.5">{OCCUPANCY_LABELS[l.occupancy]}</td><td>{l.rooms}</td><td>{l.nights}</td><td className="text-right">{money(l.rate)}</td><td className="text-right">{money(l.subtotal)}</td></tr><tr><td colSpan={5} className="pb-1.5 text-xs text-slate-500">{summarizeDates(effectiveDates(quote.lines[i] ?? {}, quote.check_in, quote.check_out))}</td></tr></Fragment>
+                            <Fragment key={i}><tr className="border-t border-slate-100"><td className="py-1.5">{OCCUPANCY_LABELS[l.occupancy]}</td><td>{l.rooms}</td><td>{l.nights}</td><td className="text-right">{money(l.rate)}</td><td className="text-right">{money(l.subtotal)}</td></tr><tr><td colSpan={5} className="pb-1.5 text-xs text-slate-500">{describeLine(quote.lines[i] ?? {}, quote.check_in, quote.check_out)}</td></tr></Fragment>
                         ))}
                     </tbody>
                 </table>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import RangeCalendar from "@/components/quotes/RangeCalendar";
 import {
     COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, MAX_NIGHTS_PER_LINE, OCCUPANCIES, OCCUPANCY_LABELS, addDays, calculateQuote, discountLabel,
-    effectiveDates, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, summarizeDates, validateDates, weekdayOf,
+    describeDates, effectiveDates, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, validateDates, weekdayOf,
     type DiscountMode, type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
 import type { QuoteRow } from "@/lib/quotes/service";
@@ -302,8 +302,7 @@ export default function QuoteForm({
                                             </div>
                                         )}
                                         <div className="text-sm text-slate-700">
-                                            <strong>{l.dates.length} {l.dates.length === 1 ? "noche" : "noches"}</strong>
-                                            {l.dates.length > 0 && <span className="text-slate-500"> — {summarizeDates(l.dates)}</span>}
+                                            {l.dates.length > 0 ? <strong>{describeDates(l.dates)}</strong> : <span className="text-slate-400">0 noches</span>}
                                             <span className="float-right text-slate-800 font-medium">{money(r?.subtotal ?? 0)}</span>
                                         </div>
                                         {l.dates.length > 0 && (

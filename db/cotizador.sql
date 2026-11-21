@@ -1,5 +1,6 @@
 -- ============================================================================
--- Módulo Cotizador — PROPUESTA PARA REVISIÓN. NO aplicada a producción.
+-- Módulo Cotizador. Ya aplicada en producción (solo documentación y reproducibilidad).
+-- La columna discount_label se agregó después: ver db/cotizador_discount_label.sql.
 -- Solo crea tablas nuevas; no modifica ninguna tabla existente
 -- (hostal_companies se usa únicamente por lectura: discount_type / discount_value).
 -- ============================================================================

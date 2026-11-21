@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 // Reutiliza los estilos del voucher para mantener la misma imagen.
 import { styles } from "./ReservationVoucher";
-import { discountLabel, effectiveDates, formatRangeText, linesShareDates, summarizeDates, formatQuoteCode, OCCUPANCY_LABELS, type QuoteCalcResult } from "../quotes/calc";
+import { describeLine, discountLabel, effectiveDates, stayText, PDF_SAFE_ARROW, formatQuoteCode, OCCUPANCY_LABELS, type QuoteCalcResult } from "../quotes/calc";
 import type { QuoteRow } from "../quotes/service";
 
 const formatDate = (d?: string | null) => {
@@ -23,10 +23,8 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
     const code = formatQuoteCode(quote.number);
     const conditions = (quote.conditions || "").split("\n").map((s) => s.trim()).filter(Boolean);
     const nights = calc.lines[0]?.nights ?? 0;
-    // Todas las líneas con las mismas noches -> Entrada/Salida/Duración; si no -> «Período: del X al Y»
-    const shared = linesShareDates(quote.lines, quote.check_in, quote.check_out);
-    const allDates = quote.lines.flatMap((l) => effectiveDates(l, quote.check_in, quote.check_out)).sort();
-    const periodText = allDates.length ? formatRangeText(allDates[0], allDates[allDates.length - 1]) : "-";
+    // Todas las líneas con las mismas noches -> Entrada/Salida/Duración; si no -> «Primera noche · Última noche (salida …)»
+    const { shared, text: stay } = stayText(quote.lines, quote.check_in, quote.check_out);
 
     return (
         <Document>
@@ -61,7 +59,7 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
                             <View style={styles.row}><Text style={styles.label}>Duración:</Text><Text style={styles.value}>{nights} {nights === 1 ? "Noche" : "Noches"}</Text></View>
                         </>
                     ) : (
-                        <View style={styles.row}><Text style={styles.label}>Período:</Text><Text style={styles.value}>{periodText}</Text></View>
+                        <View style={styles.row}><Text style={styles.label}>Estadía:</Text><Text style={styles.value}>{stay}</Text></View>
                     )}
                     <View style={styles.row}><Text style={styles.label}>Vigencia:</Text><Text style={styles.value}>{quote.validity_days} días{quote.valid_until ? ` (hasta el ${formatDate(quote.valid_until)})` : ""}</Text></View>
                 </View>
@@ -78,7 +76,7 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
                                 <Text style={col.occ}>{OCCUPANCY_LABELS[l.occupancy]}</Text><Text style={col.qty}>{l.rooms}</Text><Text style={col.nights}>{l.nights}</Text>
                                 <Text style={col.rate}>{money(l.rate)}</Text><Text style={col.sub}>{money(l.subtotal)}</Text>
                             </View>
-                            <Text style={{ fontSize: 8.5, color: "#666", marginTop: 1 }}>{summarizeDates(effectiveDates(quote.lines[i] ?? {}, quote.check_in, quote.check_out))}</Text>
+                            <Text style={{ fontSize: 8.5, color: "#666", marginTop: 1 }}>{describeLine(quote.lines[i] ?? {}, quote.check_in, quote.check_out, PDF_SAFE_ARROW)}</Text>
                         </View>
                     ))}
                 </View>

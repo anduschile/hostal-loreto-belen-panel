@@ -161,9 +161,67 @@ test("correo: lista una línea por línea de habitaciones con fechas y subtotal"
     const q = await createQuote(deps, { ...base, lines: [{ occupancy: "doble", rooms: 8, dates: recurringDates("2026-12-01", "2026-12-31", [0, 1]) }] });
     await sendQuote(deps, q.id);
     assert.equal(captured?.length, 1);
-    assert.match(captured![0], /8 × Doble — Dom y lun, del 6 al 28 de diciembre: 8 noches — \$3\.520\.000 neto/);
-    const e = buildQuoteEmail({ toEmail: "a@b.cl", code: "COT-0001", pdfBuffer: Buffer.from("x"), lineSummaries: captured });
-    assert.match(e.html, /Dom y lun, del 6 al 28 de diciembre/);
+    assert.match(captured![0], /8 × Doble — Noches de domingo y lunes, del 6 al 28 de diciembre: 8 noches — \$3\.520\.000 neto/);
+    const e = buildQuoteEmail({ toEmail: "a@b.cl", code: "COT-0001", pdfBuffer: Buffer.from("x"), lineSummaries: captured, stay: "Primera noche: 6 de diciembre" });
+    assert.match(e.html, /Noches de domingo y lunes, del 6 al 28 de diciembre/);
+    assert.match(e.html, /Primera noche: 6 de diciembre/);
+});
+
+// ---------- redacción de fechas ----------
+import { describeDates, describeLine, stayText, PDF_SAFE_ARROW } from "../src/lib/quotes/calc";
+
+test("línea en modo Rango: «Entrada mar 8 dic → Salida jue 10 dic (2 noches)»", () => {
+    assert.equal(describeDates(rangeDates("2026-12-08", "2026-12-10")), "Entrada mar 8 dic → Salida jue 10 dic (2 noches)");
+    assert.equal(describeDates(rangeDates("2026-12-01", "2026-12-02")), "Noche del 1 de diciembre"); // 1 noche = noche única
+    assert.equal(describeDates(rangeDates("2026-12-30", "2027-01-02")), "Entrada mié 30 dic 2026 → Salida sáb 2 ene 2027 (3 noches)");
+});
+
+test("línea en modo Recurrente: «Noches de lunes y martes, del 7 al 29 de diciembre: 8 noches»", () => {
+    const dates = recurringDates("2026-12-07", "2026-12-29", [1, 2]);
+    assert.equal(dates.length, 8);
+    assert.equal(describeDates(dates), "Noches de lunes y martes, del 7 al 29 de diciembre: 8 noches");
+    assert.equal(describeDates(recurringDates("2026-12-01", "2026-12-31", [0, 1])), "Noches de domingo y lunes, del 6 al 28 de diciembre: 8 noches");
+});
+
+test("noche única suelta y fechas sueltas", () => {
+    assert.equal(describeDates(["2026-12-08"]), "Noche del 8 de diciembre");
+    assert.equal(describeDates(["2026-12-06", "2026-12-09", "2026-12-13"]), "Noches del 6, 9 y 13 de diciembre: 3 noches");
+    assert.equal(describeDates(["2026-11-30", "2026-12-02"]), "Noches del 30 de noviembre y 2 de diciembre: 2 noches");
+});
+
+test("el conteo de noches aparece una sola vez en cada redacción", () => {
+    for (const d of [rangeDates("2026-12-08", "2026-12-10"), recurringDates("2026-12-07", "2026-12-29", [1, 2]), ["2026-12-06", "2026-12-09", "2026-12-13"], ["2026-12-08"]]) {
+        const t = describeDates(d);
+        assert.ok((t.match(/\d+ noches?/g) ?? []).length <= 1, t); // nunca «N noches — …: N noches»
+        assert.ok(!/\d+ noches? — /.test(t), t);
+    }
+});
+
+test("«Estadía»: fechas distintas -> primera/última noche y salida; compartidas -> Entrada · Salida · noches", () => {
+    const l1 = { dates: recurringDates("2026-12-07", "2026-12-29", [1, 2]) };
+    const l2 = { dates: ["2026-12-08"] };
+    const s = stayText([l1, l2], "2026-12-07", "2026-12-30");
+    assert.equal(s.shared, false);
+    assert.equal(s.text, "Primera noche: 7 de diciembre · Última noche: 29 de diciembre (salida 30 de diciembre)");
+    const same = stayText([{ dates: rangeDates("2026-12-01", "2026-12-04") }, { dates: rangeDates("2026-12-01", "2026-12-04") }], "2026-12-01", "2026-12-04");
+    assert.equal(same.shared, true);
+    assert.equal(same.text, "Entrada: 1 de diciembre · Salida: 4 de diciembre · 3 noches");
+});
+
+test("PDF: el separador de Entrada/Salida es compatible con la fuente Helvetica (sin «→»)", () => {
+    const line = { dates: rangeDates("2026-12-08", "2026-12-10") };
+    assert.equal(describeLine(line, null, null), "Entrada mar 8 dic → Salida jue 10 dic (2 noches)"); // pantalla y correo
+    const pdf = describeLine(line, null, null, PDF_SAFE_ARROW);
+    assert.equal(pdf, "Entrada mar 8 dic – Salida jue 10 dic (2 noches)");
+    assert.ok(!pdf.includes("→"));
+});
+
+test("cotización antigua sin dates: la redacción de fechas sigue igual que antes", () => {
+    const oldLine = { occupancy: "doble", rooms: 2, nights: 3, rate_override: 50000 } as any;
+    assert.equal(describeLine(oldLine, "2026-12-01", "2026-12-04"), "del 1 al 3 de diciembre: 3 noches"); // formato anterior
+    const s = stayText([oldLine], "2026-12-01", "2026-12-04");
+    assert.equal(s.shared, true);
+    assert.equal(s.text, "Entrada: 1 de diciembre · Salida: 4 de diciembre · 3 noches");
 });
 
 test("periodFromDates: check_out = máxima + 1 día", () => {
