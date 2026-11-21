@@ -5,8 +5,8 @@ import { Trash2, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import RangeCalendar from "@/components/quotes/RangeCalendar";
 import {
-    OCCUPANCIES, OCCUPANCY_LABELS, calculateQuote, discountLabel, nightsBetween, normalizeDiscountType,
-    type DiscountType, type Occupancy, type RateTable,
+    COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, OCCUPANCIES, OCCUPANCY_LABELS, calculateQuote, discountLabel, nightsBetween, normalizeDiscountType,
+    type DiscountMode, type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
 import type { QuoteRow } from "@/lib/quotes/service";
 
@@ -19,6 +19,39 @@ export type FormSettings = { validity_days: number; validity_provisional: boolea
 type FormLine = { occupancy: Occupancy; rooms: string; rate: string }; // rate "" -> usa la tabla
 
 const money = (n: number) => "$" + n.toLocaleString("es-CL");
+
+type Init = { mode: DiscountMode; type: "porcentaje" | "monto_fijo"; value: string; reason: string };
+
+/** Modo inicial al editar/duplicar: coincide con el convenio de la empresa, o es manual. */
+function initialDiscount(q: QuoteRow | null, companies: FormCompany[]): Init {
+    const none: Init = { mode: "ninguno", type: "porcentaje", value: "", reason: "" };
+    if (!q) return none;
+    const type = normalizeDiscountType(q.discount_type);
+    if (type === "ninguno" || !(Number(q.discount_value) > 0)) return none;
+    const c = companies.find((x) => x.id === q.company_id);
+    const label = q.discount_label?.trim() || null;
+    const matchesCompany = !!c && normalizeDiscountType(c.discount_type) === type && Number(c.discount_value) === Number(q.discount_value)
+        && (!label || label === COMPANY_DISCOUNT_LABEL);
+    if (matchesCompany) return { ...none, mode: "empresa" };
+    const reason = label && label !== MANUAL_DISCOUNT_LABEL && label !== COMPANY_DISCOUNT_LABEL ? label : "";
+    return { mode: "manual", type, value: String(q.discount_value), reason };
+}
+
+/** Misma regla que el servidor: porcentaje 0-100; monto fijo 0-neto bruto. */
+function manualDiscountError(type: "porcentaje" | "monto_fijo", value: string, gross: number): string | null {
+    if (value.trim() === "") return null;
+    const v = Number(value);
+    if (!Number.isFinite(v) || v < 0) return "El valor del descuento no es válido.";
+    if (type === "porcentaje" && v > 100) return "El porcentaje debe estar entre 0 y 100.";
+    if (type === "monto_fijo" && v > gross) return "El monto no puede superar el neto bruto de la cotización.";
+    return null;
+}
+
+function effectiveDiscount(mode: DiscountMode, company: FormCompany | undefined, type: "porcentaje" | "monto_fijo", value: string, reason: string) {
+    if (mode === "empresa" && company) return { type: normalizeDiscountType(company.discount_type), value: Number(company.discount_value) || 0, label: COMPANY_DISCOUNT_LABEL };
+    if (mode === "manual") return { type: type as DiscountType, value: Number(value) || 0, label: reason.trim() || MANUAL_DISCOUNT_LABEL };
+    return { type: "ninguno" as DiscountType, value: 0, label: null as string | null };
+}
 const input = "px-2 py-2 border border-slate-300 rounded-md text-sm w-full";
 
 /**
@@ -51,24 +84,42 @@ export default function QuoteForm({
 
     const company = companies.find((c) => String(c.id) === companyId);
     const nights = nightsBetween(start, end);
+    const companyHasDiscount = !!company && normalizeDiscountType(company.discount_type) !== "ninguno" && Number(company.discount_value) > 0;
+
+    // ---- Descuento: «Sin descuento» / «De la empresa» / «Manual» ----
+    const init = initialDiscount(q, companies);
+    const [discMode, setDiscMode] = useState<DiscountMode>(init.mode);
+    const [manType, setManType] = useState<"porcentaje" | "monto_fijo">(init.type);
+    const [manValue, setManValue] = useState(init.value);
+    const [manReason, setManReason] = useState(init.reason);
+
+    const effMode: DiscountMode = discMode === "empresa" && !companyHasDiscount ? "ninguno" : discMode;
+    const eff = effectiveDiscount(effMode, company, manType, manValue, manReason);
+
+    const rawLines = lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), nights, rate_override: l.rate === "" ? null : Number(l.rate) }));
+    const gross = useMemo(() => calculateQuote({ lines: rawLines, rates }).gross, [lines, rates, nights]); // eslint-disable-line react-hooks/exhaustive-deps
+    const discountError = effMode === "manual" ? manualDiscountError(manType, manValue, gross) : null;
 
     const calc = useMemo(() => calculateQuote({
-        lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), nights, rate_override: l.rate === "" ? null : Number(l.rate) })),
-        rates,
-        discount_type: normalizeDiscountType(company?.discount_type),
-        discount_value: company?.discount_value ?? 0,
-    }), [lines, rates, nights, company]);
+        lines: rawLines, rates,
+        discount_type: discountError ? "ninguno" : eff.type,
+        discount_value: discountError ? 0 : eff.value,
+    }), [lines, rates, nights, eff.type, eff.value, discountError]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const onCompany = (id: string) => {
         setCompanyId(id);
         const c = companies.find((x) => String(x.id) === id);
         if (c) { setCompanyName(c.name); setRut(c.rut ?? ""); setContact(c.contact_name ?? ""); setEmail(c.contact_email ?? ""); }
+        // Por defecto: «De la empresa» si tiene descuento; si no, «Sin descuento» (el modo manual se respeta).
+        const has = !!c && normalizeDiscountType(c.discount_type) !== "ninguno" && Number(c.discount_value) > 0;
+        if (discMode !== "manual") setDiscMode(has ? "empresa" : "ninguno");
     };
     const setLine = (i: number, patch: Partial<FormLine>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
 
     const submit = async (andSend: boolean) => {
         if (andSend && !email.trim()) return toast.error("Ingresa el correo del contacto para enviar.");
         if (calc.has_missing_rates) return toast.error("Hay líneas con «tarifa sin cargar»: escribe la tarifa a mano.");
+        if (discountError) return toast.error(discountError);
         setSaving(true);
         try {
             const editing = mode === "edit" && q;
@@ -77,6 +128,7 @@ export default function QuoteForm({
                 body: JSON.stringify({
                     company_id: company?.id ?? null, company_name: companyName, company_rut: rut, contact_name: contact, contact_email: email,
                     check_in: start, check_out: end, validity_days: Number(validity), conditions,
+                    discount_mode: effMode, discount_type: manType, discount_value: Number(manValue) || 0, discount_reason: manReason,
                     lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), rate_override: l.rate === "" ? null : Number(l.rate) })),
                 }),
             });
@@ -160,6 +212,28 @@ export default function QuoteForm({
 
                     <section className="grid md:grid-cols-2 gap-5">
                         <div className="space-y-3">
+                            <fieldset className="border border-slate-200 rounded-md p-3 space-y-2">
+                                <legend className="px-1 text-xs font-semibold text-slate-600">Descuento</legend>
+                                <label className="flex items-center gap-2 text-sm"><input type="radio" name="disc" checked={effMode === "ninguno"} onChange={() => setDiscMode("ninguno")} /> Sin descuento</label>
+                                {companyHasDiscount && (
+                                    <label className="flex items-center gap-2 text-sm"><input type="radio" name="disc" checked={effMode === "empresa"} onChange={() => setDiscMode("empresa")} />
+                                        De la empresa <span className="text-emerald-700">({discountLabel(company!.discount_type, company!.discount_value, COMPANY_DISCOUNT_LABEL)})</span></label>
+                                )}
+                                <label className="flex items-center gap-2 text-sm"><input type="radio" name="disc" checked={effMode === "manual"} onChange={() => setDiscMode("manual")} /> Manual</label>
+                                {effMode === "manual" && (
+                                    <div className="grid grid-cols-3 gap-2 pl-6">
+                                        <div><label className="text-xs text-slate-500">Tipo</label>
+                                            <select value={manType} onChange={(e) => setManType(e.target.value as any)} className={input}>
+                                                <option value="porcentaje">Porcentaje (%)</option><option value="monto_fijo">Monto fijo ($)</option>
+                                            </select></div>
+                                        <div><label className="text-xs text-slate-500">Valor</label>
+                                            <input type="number" min={0} value={manValue} onChange={(e) => setManValue(e.target.value)} className={input} /></div>
+                                        <div><label className="text-xs text-slate-500">Motivo (opcional)</label>
+                                            <input value={manReason} onChange={(e) => setManReason(e.target.value)} placeholder="Descuento comercial" className={input} /></div>
+                                        {discountError && <div className="col-span-3 text-xs text-red-600">{discountError}</div>}
+                                    </div>
+                                )}
+                            </fieldset>
                             <div>
                                 <label className="text-xs text-slate-500">Vigencia (días) {settings.validity_provisional && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">provisional</span>}</label>
                                 <input type="number" min={1} value={validity} onChange={(e) => setValidity(e.target.value)} className={input + " w-28"} />
@@ -170,7 +244,7 @@ export default function QuoteForm({
                         <div className="bg-slate-50 rounded-lg p-4 text-sm space-y-1 h-fit">
                             {calc.discount > 0 && (<>
                                 <div className="flex justify-between"><span>Subtotal</span><span>{money(calc.gross)}</span></div>
-                                <div className="flex justify-between text-emerald-700"><span>{discountLabel(company?.discount_type, company?.discount_value)}</span><span>-{money(calc.discount)}</span></div>
+                                <div className="flex justify-between text-emerald-700"><span>{discountLabel(eff.type, eff.value, eff.label)}</span><span>-{money(calc.discount)}</span></div>
                             </>)}
                             <div className="flex justify-between"><span>Neto</span><span>{money(calc.net)}</span></div>
                             <div className="flex justify-between"><span>IVA (19%)</span><span>{money(calc.iva)}</span></div>

@@ -60,7 +60,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
     const send = async () => {
         if (!email.trim()) return toast.error("Ingresa un correo de destino.");
-        if (!window.confirm(`¿Enviar la cotización ${code} a ${email.trim()}?`)) return;
+        if (!window.confirm(`¿${isDraft ? "Enviar" : "Reenviar"} la cotización ${code} a ${email.trim()}?`)) return;
         setBusy("send");
         try {
             const r = await (await fetch(`/api/quotes/${quote.id}/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim() }) })).json();
@@ -124,7 +124,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
                     <Row label="Salida">{fmtDate(quote.check_out)}</Row>
                     <Row label="Noches">{nights}</Row>
                     <Row label="Vigencia">{quote.validity_days} días{quote.valid_until ? ` (hasta el ${fmtDate(quote.valid_until)})` : ""}</Row>
-                    <Row label="Fecha de envío">{quote.sent_at ? fmtDate(quote.sent_at) : "Sin enviar"}</Row>
+                    <Row label="Fecha de envío">{quote.sent_at ? fmtDate(quote.sent_at) : (quote.status === "enviada" || quote.status === "aceptada") ? "Sin envío registrado por el sistema" : "Sin enviar"}</Row>
                 </dl>
             </section>
 
@@ -141,7 +141,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
                 <div className="mt-4 ml-auto w-full max-w-xs text-sm space-y-1">
                     {hasDiscount && (<>
                         <div className="flex justify-between"><span>Subtotal</span><span>{money(quote.gross)}</span></div>
-                        <div className="flex justify-between text-emerald-700"><span>{discountLabel(quote.discount_type, quote.discount_value)}</span><span>-{money(quote.discount)}</span></div>
+                        <div className="flex justify-between text-emerald-700"><span>{discountLabel(quote.discount_type, quote.discount_value, quote.discount_label)}</span><span>-{money(quote.discount)}</span></div>
                     </>)}
                     <div className="flex justify-between"><span>Neto</span><span>{money(quote.net)}</span></div>
                     <div className="flex justify-between"><span>IVA (19%)</span><span>{money(quote.iva)}</span></div>
@@ -157,17 +157,17 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
             </section>
 
             <section className="bg-white rounded-lg border border-slate-200 p-5 space-y-3">
-                <h2 className="font-semibold text-slate-700">Enviar por correo</h2>
+                <h2 className="font-semibold text-slate-700">{isDraft ? "Enviar por correo" : "Reenviar por correo"}</h2>
                 <div className="flex flex-wrap gap-2 items-end">
                     <div className="flex-1 min-w-64">
                         <label className="text-xs text-slate-500">Correo destino (puedes cambiarlo antes de enviar)</label>
                         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="px-2 py-2 border border-slate-300 rounded-md text-sm w-full" />
                     </div>
                     <button disabled={busy !== ""} onClick={send} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-sm font-medium inline-flex items-center gap-2 disabled:opacity-50">
-                        {busy === "send" ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Enviar por correo
+                        {busy === "send" ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {isDraft ? "Enviar por correo" : "Reenviar por correo"}
                     </button>
                 </div>
-                <p className="text-xs text-slate-400">Si el sistema está en modo simulado, el correo no sale y la cotización sigue en borrador.</p>
+                {isDraft && <p className="text-xs text-slate-400">Si el sistema está en modo simulado, el correo no sale y la cotización sigue en borrador.</p>}
             </section>
         </div>
     );

@@ -87,13 +87,19 @@ export function normalizeDiscountType(v: unknown): DiscountType {
 }
 
 /** Texto del descuento para PDF/pantalla: «Descuento convenio 25%» o «Descuento convenio $50.000». */
-export function discountLabel(type?: unknown, value?: number | null): string {
+export function discountLabel(type?: unknown, value?: number | null, label?: string | null): string {
     const t = normalizeDiscountType(type);
     const v = num(value);
-    if (t === "porcentaje" && v > 0) return `Descuento convenio ${Number.isInteger(v) ? v : String(v).replace(".", ",")}%`;
-    if (t === "monto_fijo" && v > 0) return `Descuento convenio $${Math.round(v).toLocaleString("es-CL")}`;
+    // Sin etiqueta guardada (cotizaciones antiguas): venían del convenio de la empresa.
+    const base = label?.trim() || "Descuento convenio";
+    if (t === "porcentaje" && v > 0) return `${base} ${Number.isInteger(v) ? v : String(v).replace(".", ",")}%`;
+    if (t === "monto_fijo" && v > 0) return `${base} $${Math.round(v).toLocaleString("es-CL")}`;
     return "Descuento";
 }
+
+export type DiscountMode = "ninguno" | "empresa" | "manual";
+export const COMPANY_DISCOUNT_LABEL = "Descuento convenio";
+export const MANUAL_DISCOUNT_LABEL = "Descuento";
 
 export function calculateDiscount(gross: number, rawType?: unknown, value?: number | null): number {
     const type = normalizeDiscountType(rawType);

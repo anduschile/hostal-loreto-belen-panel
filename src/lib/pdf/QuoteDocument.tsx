@@ -37,7 +37,6 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
                     </View>
                     <View>
                         <Text style={{ fontSize: 12, fontWeight: "bold" }}>{code}</Text>
-                        <Text style={styles.subtitle}>Estado: {quote.status.toUpperCase()}</Text>
                     </View>
                 </View>
 
@@ -76,7 +75,7 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
                     {calc.discount > 0 && (
                         <>
                             <View style={styles.row}><Text style={[styles.label, { width: 170 }]}>Subtotal:</Text><Text style={styles.value}>{money(calc.gross)}</Text></View>
-                            <View style={styles.row}><Text style={[styles.label, { width: 170 }]}>{discountLabel(quote.discount_type, quote.discount_value)}:</Text><Text style={styles.value}>-{money(calc.discount)}</Text></View>
+                            <View style={styles.row}><Text style={[styles.label, { width: 170 }]}>{discountLabel(quote.discount_type, quote.discount_value, quote.discount_label)}:</Text><Text style={styles.value}>-{money(calc.discount)}</Text></View>
                         </>
                     )}
                     <View style={styles.row}><Text style={[styles.label, { width: 170 }]}>Neto:</Text><Text style={styles.value}>{money(calc.net)}</Text></View>
@@ -96,9 +95,9 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
 
                 <View style={styles.footer}>
                     <Text style={{ fontWeight: "bold", marginBottom: 5 }}>Información Importante</Text>
-                    <Text>Check-in: Desde las 15:00 hrs | Check-out: Hasta las 11:00 hrs</Text>
+                    <Text>Check-out: hasta las 11:00 hrs</Text>
                     <Text style={styles.footerLine}>Dirección: Yungay 551</Text>
-                    <Text style={styles.footerLine}>Teléfono: (61) 2 413285</Text>
+                    <Text style={styles.footerLine}>Teléfono: +56 61 241 3285</Text>
                     <Text style={styles.footerLine}>Puerto Natales - Chile</Text>
                 </View>
             </Page>

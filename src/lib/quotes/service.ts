@@ -4,6 +4,9 @@ import {
     addDays,
     calculateQuote,
     normalizeDiscountType,
+    COMPANY_DISCOUNT_LABEL,
+    MANUAL_DISCOUNT_LABEL,
+    type DiscountMode,
     formatQuoteCode,
     nightsBetween,
     OCCUPANCIES,
@@ -34,6 +37,7 @@ export type QuoteRow = {
     lines: { occupancy: Occupancy; rooms: number; nights: number; rate_override: number | null }[];
     discount_type: DiscountType;
     discount_value: number;
+    discount_label: string | null;
     gross: number;
     discount: number;
     net: number;
@@ -56,8 +60,12 @@ export type QuoteInput = {
     check_in: string;
     check_out: string;
     lines: { occupancy: Occupancy; rooms: number; rate_override?: number | null }[];
+    /** «ninguno» | «empresa» | «manual». Si falta: «empresa» si la empresa tiene descuento; si no, «ninguno». */
+    discount_mode?: DiscountMode;
+    /** Solo modo manual */
     discount_type?: DiscountType;
     discount_value?: number;
+    discount_reason?: string | null;
     validity_days?: number;
     conditions?: string | null;
 };
@@ -105,6 +113,40 @@ export function calcForRow(row: QuoteRow, rates: RateTable): QuoteCalcResult {
     });
 }
 
+type ResolvedDiscount = { discount_type: DiscountType; discount_value: number; discount_label: string | null };
+const NO_DISCOUNT: ResolvedDiscount = { discount_type: "ninguno", discount_value: 0, discount_label: null };
+
+/** Decide y valida el descuento. Límites: porcentaje 0-100; monto fijo 0-bruto. */
+async function resolveDiscount(deps: QuoteDeps, input: QuoteInput, gross: number): Promise<ResolvedDiscount> {
+    const company = input.company_id ? await deps.repo.getCompanyDiscount(input.company_id) : null;
+    const companyHas = !!company && normalizeDiscountType(company.discount_type) !== "ninguno" && Number(company.discount_value) > 0;
+    const mode: DiscountMode = input.discount_mode ?? (companyHas ? "empresa" : "ninguno");
+
+    if (mode === "ninguno") return NO_DISCOUNT;
+
+    if (mode === "empresa") {
+        if (!companyHas) throw new Error("La empresa elegida no tiene descuento configurado.");
+        return {
+            discount_type: normalizeDiscountType(company!.discount_type),
+            discount_value: Number(company!.discount_value),
+            discount_label: COMPANY_DISCOUNT_LABEL,
+        };
+    }
+
+    if (mode === "manual") {
+        const type = normalizeDiscountType(input.discount_type);
+        if (type === "ninguno") throw new Error("Elige el tipo de descuento manual (porcentaje o monto fijo).");
+        const value = Number(input.discount_value);
+        if (!Number.isFinite(value) || value < 0) throw new Error("El valor del descuento no es válido.");
+        if (type === "porcentaje" && value > 100) throw new Error("El porcentaje de descuento debe estar entre 0 y 100.");
+        if (type === "monto_fijo" && value > gross) throw new Error("El descuento en monto fijo no puede superar el neto bruto de la cotización.");
+        if (value === 0) return NO_DISCOUNT;
+        return { discount_type: type, discount_value: value, discount_label: input.discount_reason?.trim() || MANUAL_DISCOUNT_LABEL };
+    }
+
+    throw new Error("Modo de descuento no válido.");
+}
+
 type QuoteFields = Omit<QuoteRow, "id" | "number" | "created_at" | "status" | "sent_at">;
 
 /**
@@ -119,23 +161,21 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
     const [rates, settings] = await Promise.all([deps.repo.getRates(), deps.repo.getSettings()]);
     const nights = nightsBetween(input.check_in, input.check_out);
 
-    let discount_type: DiscountType = normalizeDiscountType(input.discount_type);
-    let discount_value = input.discount_value ?? 0;
-    if (input.company_id && discount_type === "ninguno") {
-        const d = await deps.repo.getCompanyDiscount(input.company_id);
-        if (d) ({ discount_type, discount_value } = d);
-    }
-
     const rawLines = input.lines.map((l) => ({
         occupancy: l.occupancy,
         rooms: Number(l.rooms),
         nights,
         rate_override: Number(l.rate_override) > 0 ? Number(l.rate_override) : null,
     }));
-    const calc = calculateQuote({ lines: rawLines, rates, discount_type, discount_value });
-    if (calc.has_missing_rates) {
+    // 1) bruto sin descuento (sirve para validar el monto fijo)
+    const base = calculateQuote({ lines: rawLines, rates });
+    if (base.has_missing_rates) {
         throw new Error("Hay líneas con «tarifa sin cargar»: escribe la tarifa a mano o carga las tarifas.");
     }
+    // 2) descuento según el modo; siempre se resuelve en el servidor
+    const { discount_type, discount_value, discount_label } = await resolveDiscount(deps, input, base.gross);
+    // 3) cálculo final: el descuento va sobre el neto, antes de IVA
+    const calc = calculateQuote({ lines: rawLines, rates, discount_type, discount_value });
     const lines = rawLines.map((l, i) => ({ ...l, rate_override: calc.lines[i].rate })); // tarifa congelada
 
     const validity_days = input.validity_days && input.validity_days > 0 ? input.validity_days : settings.validity_days;
@@ -152,6 +192,7 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
         lines,
         discount_type,
         discount_value,
+        discount_label,
         gross: calc.gross,
         discount: calc.discount,
         net: calc.net,
@@ -216,8 +257,9 @@ export async function sendQuote(deps: QuoteDeps, id: number, opts: { toEmail?: s
     // Modo simulado: el correo NO salió, así que la cotización NO pasa a «enviada».
     if (result.simulated) return { quote, simulated: true, pdfBytes: pdfBuffer.length };
 
+    // Un reenvío no cambia el estado de una cotización ya aceptada/rechazada/vencida; solo registra la fecha.
     const updated = await deps.repo.updateQuote(id, {
-        status: "enviada",
+        ...(quote.status === "borrador" ? { status: "enviada" as const } : {}),
         sent_at: new Date().toISOString(),
     });
     return { quote: updated, simulated: result.simulated, pdfBytes: pdfBuffer.length };

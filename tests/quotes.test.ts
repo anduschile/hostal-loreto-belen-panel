@@ -256,3 +256,119 @@ test("conversión IVA de tarifas: con IVA -> neto = round(valor/1.19); neto se m
     // estable: neto -> con IVA -> neto devuelve el mismo neto
     for (const n of [1, 999, 46218, 50000, 123457]) assert.equal(toNetRate(withIva(n), "con_iva"), n);
 });
+
+// ---------- descuento manual / modos / etiquetas ----------
+const noCompany = { ...input, company_id: null as number | null };
+
+test("manual porcentaje con motivo: sobre el neto, antes de IVA; guarda tipo, valor y etiqueta", async () => {
+    const { deps } = memoryDeps();
+    const q = await createQuote(deps, { ...noCompany, discount_mode: "manual", discount_type: "porcentaje", discount_value: 10, discount_reason: "Descuento comercial" });
+    assert.equal(q.discount_type, "porcentaje");
+    assert.equal(q.discount_value, 10);
+    assert.equal(q.discount_label, "Descuento comercial");
+    assert.equal(q.gross, 330000);
+    assert.equal(q.discount, 33000);
+    assert.equal(q.net, 297000);
+    assert.equal(q.iva, Math.round(297000 * 0.19)); // IVA sobre el neto ya descontado
+    assert.equal(q.total, q.net + q.iva);
+    assert.equal(discountLabel(q.discount_type, q.discount_value, q.discount_label), "Descuento comercial 10%");
+});
+
+test("manual monto fijo sin motivo: etiqueta «Descuento»", async () => {
+    const { deps } = memoryDeps();
+    const q = await createQuote(deps, { ...noCompany, discount_mode: "manual", discount_type: "monto_fijo", discount_value: 50000 });
+    assert.equal(q.discount, 50000);
+    assert.equal(q.net, 280000);
+    assert.equal(q.discount_label, "Descuento");
+    assert.equal(discountLabel(q.discount_type, q.discount_value, q.discount_label), "Descuento $50.000");
+});
+
+test("de la empresa: etiqueta «Descuento convenio» (Acuimag 25%)", async () => {
+    const { deps } = memoryDeps();
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: "porcentaje", discount_value: 25 });
+    const q = await createQuote(deps, { ...input, company_id: 6, discount_mode: "empresa" });
+    assert.equal(q.discount_label, "Descuento convenio");
+    assert.equal(discountLabel(q.discount_type, q.discount_value, q.discount_label), "Descuento convenio 25%");
+    assert.equal(q.discount, 82500);
+});
+
+test("por defecto: empresa con descuento -> «empresa»; sin descuento -> ninguno", async () => {
+    const { deps } = memoryDeps();
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: "porcentaje", discount_value: 25 });
+    assert.equal((await createQuote(deps, { ...input, company_id: 6 })).discount_type, "porcentaje");
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: "ninguno", discount_value: 0 });
+    const n = await createQuote(deps, { ...input, company_id: 7 });
+    assert.equal(n.discount_type, "ninguno");
+    assert.equal(n.discount_label, null);
+});
+
+test("«Sin descuento» elegido a propósito ignora el convenio de la empresa", async () => {
+    const { deps } = memoryDeps();
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: "porcentaje", discount_value: 25 });
+    const q = await createQuote(deps, { ...input, company_id: 6, discount_mode: "ninguno" });
+    assert.equal(q.discount, 0);
+    assert.equal(q.net, 330000);
+});
+
+test("«De la empresa» sin convenio configurado se rechaza", async () => {
+    const { deps } = memoryDeps();
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: "ninguno", discount_value: 0 });
+    await assert.rejects(() => createQuote(deps, { ...input, company_id: 7, discount_mode: "empresa" }), /no tiene descuento/);
+});
+
+test("límites inválidos: porcentaje 120, monto mayor al neto, negativos, tipo faltante", async () => {
+    const { deps } = memoryDeps();
+    const m = (p: object) => createQuote(deps, { ...noCompany, discount_mode: "manual", ...p } as any);
+    await assert.rejects(() => m({ discount_type: "porcentaje", discount_value: 120 }), /entre 0 y 100/);
+    await assert.rejects(() => m({ discount_type: "monto_fijo", discount_value: 330001 }), /no puede superar el neto bruto/);
+    await assert.rejects(() => m({ discount_type: "porcentaje", discount_value: -5 }), /no es válido/);
+    await assert.rejects(() => m({ discount_type: "monto_fijo", discount_value: "abc" }), /no es válido/);
+    await assert.rejects(() => m({ discount_value: 10 }), /tipo de descuento/);
+    // bordes válidos
+    assert.equal((await m({ discount_type: "porcentaje", discount_value: 100 })).net, 0);
+    assert.equal((await m({ discount_type: "monto_fijo", discount_value: 330000 })).net, 0);
+    assert.equal((await m({ discount_type: "porcentaje", discount_value: 0 })).discount_type, "ninguno");
+});
+
+test("el servidor ignora descuento/totales del navegador fuera de las reglas", async () => {
+    const { deps } = memoryDeps();
+    const q = await createQuote(deps, { ...noCompany, discount_mode: "ninguno", discount_type: "porcentaje", discount_value: 90, total: 1, discount: 999999 } as any);
+    assert.equal(q.discount, 0);
+    assert.equal(q.net, 330000);
+});
+
+test("editar cambiando el tipo de descuento (empresa -> manual monto fijo -> sin descuento)", async () => {
+    const { deps } = memoryDeps();
+    deps.repo.getCompanyDiscount = async () => ({ discount_type: "porcentaje", discount_value: 25 });
+    const q = await createQuote(deps, { ...input, company_id: 6 });
+    assert.equal(q.discount_type, "porcentaje");
+
+    const e1 = await updateQuoteDraft(deps, q.id, { ...input, company_id: 6, discount_mode: "manual", discount_type: "monto_fijo", discount_value: 40000, discount_reason: "Acuerdo especial" });
+    assert.equal(e1.discount_type, "monto_fijo");
+    assert.equal(e1.discount_label, "Acuerdo especial");
+    assert.equal(e1.net, 290000);
+    assert.equal(e1.number, q.number);
+
+    const e2 = await updateQuoteDraft(deps, q.id, { ...input, company_id: 6, discount_mode: "ninguno" });
+    assert.equal(e2.discount_type, "ninguno");
+    assert.equal(e2.discount_label, null);
+    assert.equal(e2.total, 330000 + Math.round(330000 * 0.19));
+});
+
+test("reenvío real de una cotización aceptada conserva el estado y registra sent_at", async () => {
+    const { deps, store } = memoryDeps();
+    deps.sendEmail = async () => ({ simulated: false });
+    const q = await createQuote(deps, input);
+    store.set(q.id, { ...store.get(q.id)!, status: "aceptada", sent_at: null });
+    const r = await sendQuote(deps, q.id);
+    assert.equal(store.get(q.id)!.status, "aceptada");
+    assert.ok(store.get(q.id)!.sent_at);
+    assert.equal(r.simulated, false);
+});
+
+test("etiquetas del descuento (con y sin etiqueta guardada)", () => {
+    assert.equal(discountLabel("porcentaje", 25, "Descuento convenio"), "Descuento convenio 25%");
+    assert.equal(discountLabel("porcentaje", 25, null), "Descuento convenio 25%"); // cotizaciones antiguas
+    assert.equal(discountLabel("monto_fijo", 50000, "Descuento comercial"), "Descuento comercial $50.000");
+    assert.equal(discountLabel("ninguno", 0, "x"), "Descuento");
+});
