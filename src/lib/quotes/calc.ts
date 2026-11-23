@@ -346,15 +346,18 @@ export function describeLine(line: { dates?: string[] | null }, checkIn?: string
 
 /**
  * Línea de estadía para detalle/correo.
- *  - todas las líneas comparten noches: «Entrada: 1 de diciembre · Salida: 4 de diciembre · 3 noches»
- *  - fechas distintas: «Primera noche: 7 de diciembre · Última noche: 29 de diciembre (salida 30 de diciembre)»
+ *  - todas las líneas comparten noches consecutivas: «Entrada: 1 de diciembre · Salida: 4 de diciembre · 3 noches»
+ *  - recurrentes, sueltas o fechas distintas: «Primera noche: 7 de diciembre · Última noche: 29 de diciembre (salida 30 de diciembre)»
  */
 export function stayText(lines: { dates?: string[] | null }[], checkIn?: string | null, checkOut?: string | null): { shared: boolean; text: string } {
     const all = lines.flatMap((l) => effectiveDates(l, checkIn, checkOut)).sort();
     if (all.length === 0) return { shared: true, text: "" };
     const first = all[0], last = all[all.length - 1], exit = addDays(last, 1);
     const withYear = parts(first).y !== parts(exit).y;
-    const shared = linesShareDates(lines, checkIn, checkOut);
+    // «Entrada / Salida / Noches» solo para una estadía continua: mismas fechas en todas las líneas y noches consecutivas.
+    const own = effectiveDates(lines[0], checkIn, checkOut);
+    const isContinuous = own.length > 0 && own.every((d, i) => i === 0 || d === addDays(own[i - 1], 1));
+    const shared = linesShareDates(lines, checkIn, checkOut) && isContinuous;
     if (shared) {
         const n = effectiveDates(lines[0], checkIn, checkOut).length;
         return { shared, text: `Entrada: ${formatDayLong(first, withYear)} · Salida: ${formatDayLong(exit, withYear)} · ${nightsText(n)}` };
@@ -363,6 +366,12 @@ export function stayText(lines: { dates?: string[] | null }[], checkIn?: string 
         shared,
         text: `Primera noche: ${formatDayLong(first, withYear)} · Última noche: ${formatDayLong(last, withYear)} (salida ${formatDayLong(exit, withYear)})`,
     };
+}
+
+/** Fecha corta para la lista: «4 dic» (año solo si no es el año actual). Los datos guardados no cambian. */
+export function formatListDate(iso: string, now: Date = new Date()): string {
+    const p = parts(iso);
+    return `${p.d} ${MONTHS_SHORT_ES[p.m]}${p.y !== now.getFullYear() ? ` ${p.y}` : ""}`;
 }
 
 export function formatQuoteCode(n: number): string {
