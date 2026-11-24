@@ -228,3 +228,58 @@ test("periodFromDates: check_out = máxima + 1 día", () => {
     assert.deepEqual(periodFromDates(["2026-12-31", "2026-12-05"]), { check_in: "2026-12-05", check_out: "2027-01-01" });
     assert.equal(periodFromDates([]), null);
 });
+
+// ---- Redacción de estadía: bloque Entrada/Salida/Noches solo para estadías continuas ----
+import { formatListDate } from "../src/lib/quotes/calc";
+
+test("estadía (a): una línea en rango continuo -> Entrada / Salida / Noches", () => {
+    const s = stayText([{ dates: rangeDates("2026-12-04", "2026-12-09") }], "2026-12-04", "2026-12-09");
+    assert.equal(s.shared, true);
+    assert.equal(s.text, "Entrada: 4 de diciembre · Salida: 9 de diciembre · 5 noches");
+});
+
+test("estadía (b): una línea recurrente única (COT-0004: lunes y viernes de diciembre) -> Primera/Última noche", () => {
+    const dates = recurringDates("2026-12-01", "2026-12-31", [1, 5]);
+    const s = stayText([{ dates }], "2026-12-04", "2026-12-29");
+    assert.equal(s.shared, false);
+    assert.equal(s.text, "Primera noche: 4 de diciembre · Última noche: 28 de diciembre (salida 29 de diciembre)");
+    assert.ok(!s.text.includes("Noches"));
+    const mail = buildQuoteEmail({ toEmail: "a@b.cl", code: "COT-0004", pdfBuffer: Buffer.from("x"), lineSummaries: [], stay: s.text });
+    assert.match(mail.html, /Primera noche: 4 de diciembre/);
+    assert.doesNotMatch(mail.html, /Entrada:/);
+});
+
+test("estadía (c): dos líneas con las mismas fechas consecutivas -> Entrada / Salida / Noches", () => {
+    const d = rangeDates("2026-12-01", "2026-12-04");
+    const s = stayText([{ dates: d }, { dates: [...d] }], "2026-12-01", "2026-12-04");
+    assert.equal(s.shared, true);
+    assert.equal(s.text, "Entrada: 1 de diciembre · Salida: 4 de diciembre · 3 noches");
+});
+
+test("estadía (c2): dos líneas con las mismas noches sueltas (no consecutivas) -> Primera/Última noche", () => {
+    const d = ["2026-12-01", "2026-12-03"];
+    const s = stayText([{ dates: d }, { dates: [...d] }], "2026-12-01", "2026-12-04");
+    assert.equal(s.shared, false);
+    assert.equal(s.text, "Primera noche: 1 de diciembre · Última noche: 3 de diciembre (salida 4 de diciembre)");
+});
+
+test("estadía (d): líneas con fechas distintas -> Primera/Última noche", () => {
+    const s = stayText([{ dates: rangeDates("2026-12-01", "2026-12-04") }, { dates: ["2026-12-20"] }], "2026-12-01", "2026-12-21");
+    assert.equal(s.shared, false);
+    assert.equal(s.text, "Primera noche: 1 de diciembre · Última noche: 20 de diciembre (salida 21 de diciembre)");
+});
+
+test("estadía (e): cotización antigua sin dates se ve igual que antes", () => {
+    const oldLine = { occupancy: "doble", rooms: 2, nights: 3 } as any;
+    const s = stayText([oldLine], "2026-12-01", "2026-12-04");
+    assert.equal(s.shared, true);
+    assert.equal(s.text, "Entrada: 1 de diciembre · Salida: 4 de diciembre · 3 noches");
+});
+
+test("lista de cotizaciones: «4 dic → 30 dic», con año solo si no es el año actual", () => {
+    const now = new Date(2026, 10, 23);
+    assert.equal(formatListDate("2026-12-04", now), "4 dic");
+    assert.equal(formatListDate("2026-12-30", now), "30 dic");
+    assert.equal(formatListDate("2027-01-02", now), "2 ene 2027");
+    assert.equal(`${formatListDate("2026-12-04", now)} → ${formatListDate("2026-12-30", now)}`, "4 dic → 30 dic");
+});

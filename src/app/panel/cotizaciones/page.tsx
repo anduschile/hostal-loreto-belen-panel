@@ -7,7 +7,7 @@ import { Plus, Loader2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import QuoteForm, { type FormCompany, type FormSettings } from "@/components/quotes/QuoteForm";
-import { DEFAULT_CONDITIONS, DEFAULT_VALIDITY_DAYS, QUOTE_STATUSES, emptyRates, formatQuoteCode, type RateTable } from "@/lib/quotes/calc";
+import { DEFAULT_CONDITIONS, DEFAULT_VALIDITY_DAYS, QUOTE_STATUSES, emptyRates, formatQuoteCode, formatListDate, type RateTable } from "@/lib/quotes/calc";
 import type { QuoteRow } from "@/lib/quotes/service";
 import { STATUS_STYLE } from "@/components/quotes/statusStyle";
 
@@ -91,7 +91,7 @@ function CotizacionesInner() {
                                 <tr key={q.id} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => router.push(`/panel/cotizaciones/${q.id}`)}>
                                     <td className="p-3 font-medium">{formatQuoteCode(q.number)}</td>
                                     <td className="p-3">{q.company_name}<div className="text-xs text-slate-400">{q.contact_email}</div></td>
-                                    <td className="p-3">{q.check_in} → {q.check_out}</td>
+                                    <td className="p-3">{formatListDate(q.check_in)} → {formatListDate(q.check_out)}</td>
                                     <td className="p-3 text-right">{money(q.total)}</td>
                                     <td className="p-3">{q.valid_until ?? "-"}</td>
                                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
