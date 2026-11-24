@@ -2,13 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { Trash2, Edit2 } from "lucide-react";
 import ReservationFormModal from "@/components/reservations/ReservationFormModal";
 import { HostalRoom, Guest } from "@/types/hostal";
 import { formatSantiagoShort } from "@/lib/public-api/format";
 import { stayOverlapsRange } from "@/lib/reservations/range";
+import { formatDateCL } from "@/lib/utils/date";
 
 type Reservation = {
     id: number;
@@ -111,6 +110,11 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
         }
     };
 
+    const handleNew = () => {
+        setEditingReservation(null);
+        setIsModalOpen(true);
+    };
+
     const handleEdit = (res: Reservation) => {
         setEditingReservation(res);
         setIsModalOpen(true);
@@ -162,6 +166,14 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
                 >
                     Aplicar
                 </button>
+
+                <button
+                    type="button"
+                    onClick={handleNew}
+                    className="h-[38px] px-5 rounded-md bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors ml-auto"
+                >
+                    Nueva reserva
+                </button>
             </div>
 
             {/* TEXTO DE RANGO */}
@@ -188,17 +200,9 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
                                 : "Sin habitación");
                         const guestName = res.hostal_guests?.full_name ?? "Sin huésped";
 
-                        const inLabel = parseDateSafe(res.check_in)
-                            ? format(parseDateSafe(res.check_in)!, "dd-MM-yyyy", {
-                                locale: es,
-                            })
-                            : res.check_in;
-
-                        const outLabel = parseDateSafe(res.check_out)
-                            ? format(parseDateSafe(res.check_out)!, "dd-MM-yyyy", {
-                                locale: es,
-                            })
-                            : res.check_out;
+                        // Las columnas date se formatean sobre el texto YYYY-MM-DD (sin pasar por Date/zona horaria).
+                        const inLabel = formatDateCL(String(res.check_in).slice(0, 10));
+                        const outLabel = formatDateCL(String(res.check_out).slice(0, 10));
 
                         const isDeleting = deletingId === res.id;
 
