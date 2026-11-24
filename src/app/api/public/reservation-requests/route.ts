@@ -4,6 +4,7 @@ import { jsonWithCors, preflightResponse } from "@/lib/public-api/cors";
 import { computeClientRef, getClientIp, getSalt, MissingSaltError } from "@/lib/public-api/clientRef";
 import { sendRequestEmails } from "@/lib/public-api/emails";
 import { GENERIC_ERROR, mapDbError } from "@/lib/public-api/errors";
+import { getTurnstileSecret, verifyTurnstile } from "@/lib/public-api/turnstile";
 import { HOLD_HOURS, issueFields, ReservationRequestSchema } from "@/lib/public-api/schema";
 
 export const runtime = "nodejs";
@@ -57,15 +58,44 @@ export async function POST(req: Request) {
         return fakeCreated(body as Record<string, unknown>, origin);
     }
 
-    const parsed = ReservationRequestSchema.safeParse(body);
+    // El token de Turnstile no forma parte del esquema (estricto): se separa antes de validar.
+    const { turnstile_token: turnstileToken, ...formFields } = body as Record<string, unknown>;
+
+    const parsed = ReservationRequestSchema.safeParse(formFields);
     if (!parsed.success) {
         return jsonWithCors({ error: "solicitud_invalida", fields: issueFields(parsed.error) }, 400, origin);
     }
     const d = parsed.data;
 
+    // Turnstile: después de validar los campos (para no gastar el token con un formulario inválido)
+    // y antes de los límites anti-spam y de la base.
+    const clientIp = getClientIp(req.headers);
+    const turnstileSecret = getTurnstileSecret();
+    if (!turnstileSecret) {
+        if (process.env.NODE_ENV === "production") {
+            console.error("[public-api] Falta configurar TURNSTILE_SECRET_KEY en producción; la API pública está deshabilitada.");
+            return jsonWithCors({ error: GENERIC_ERROR.error }, GENERIC_ERROR.status, origin);
+        }
+        // SOLO DESARROLLO LOCAL / PRUEBAS (NODE_ENV distinto de production): sin secreto se omite la
+        // verificación para poder probar sin cuenta de Cloudflare. En producción esta rama nunca se ejecuta.
+    } else {
+        if (typeof turnstileToken !== "string" || turnstileToken.trim() === "") {
+            return jsonWithCors({ error: "verificacion_requerida" }, 400, origin);
+        }
+        const verdict = await verifyTurnstile(turnstileToken.trim(), clientIp);
+        if (verdict.status === "rechazado") {
+            console.error(`[public-api] Turnstile rechazó el token: ${verdict.errorCodes.join(",") || "sin códigos"}`);
+            return jsonWithCors({ error: "verificacion_fallida" }, 400, origin);
+        }
+        if (verdict.status === "no_disponible") {
+            console.error("[public-api] Turnstile no disponible (red, timeout o error HTTP de Cloudflare).");
+            return jsonWithCors({ error: "verificacion_no_disponible" }, 503, origin);
+        }
+    }
+
     let clientRef: string;
     try {
-        clientRef = computeClientRef(getClientIp(req.headers), getSalt());
+        clientRef = computeClientRef(clientIp, getSalt());
     } catch (e) {
         if (e instanceof MissingSaltError) {
             console.error("[public-api] Falta configurar PUBLIC_API_HASH_SALT en producción; la API pública está deshabilitada.");
