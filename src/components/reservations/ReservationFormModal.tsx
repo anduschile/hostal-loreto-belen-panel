@@ -127,7 +127,7 @@ export default function ReservationFormModal({
     // Candado síncrono contra doble clic (el estado de React se actualiza tras el render).
     const submitLockRef = useRef(false);
 
-    // Aviso (no bloqueante) de solapamiento con otras reservas de la misma habitación
+    // Solapamiento con otras reservas de la misma habitación: bloquea el guardado (salvo superadmin autorizado)
     type OverlapConflict = {
         id: number;
         code: string | null;
@@ -137,6 +137,10 @@ export default function ReservationFormModal({
         guest_name: string | null;
     };
     const [overlapConflicts, setOverlapConflicts] = useState<OverlapConflict[]>([]);
+    const [isSuperadmin, setIsSuperadmin] = useState(false);
+    const [allowOverlap, setAllowOverlap] = useState(false);
+    const [showOverlapModal, setShowOverlapModal] = useState(false);
+    const lastShownOverlapKeyRef = useRef("");
 
     // External Referral
     const [formFulfillmentType, setFormFulfillmentType] = useState<"INTERNAL" | "EXTERNAL">("INTERNAL");
@@ -160,10 +164,18 @@ export default function ReservationFormModal({
     // Aviso de solapamiento: consulta con debounce cuando cambian habitación o fechas.
     // No bloquea el guardado; si la consulta falla, simplemente no se muestra nada.
     useEffect(() => {
-        setOverlapConflicts([]);
-        if (!isOpen || formFulfillmentType !== "INTERNAL" || !formRoomId) return;
         const isoDay = /^\d{4}-\d{2}-\d{2}$/;
-        if (!isoDay.test(formCheckIn) || !isoDay.test(formCheckOut) || formCheckOut <= formCheckIn) return;
+        const canCheck =
+            isOpen &&
+            formFulfillmentType === "INTERNAL" &&
+            !!formRoomId &&
+            isoDay.test(formCheckIn) &&
+            isoDay.test(formCheckOut) &&
+            formCheckOut > formCheckIn;
+        if (!canCheck) {
+            setOverlapConflicts([]);
+            return;
+        }
 
         const controller = new AbortController();
         const timer = setTimeout(async () => {
@@ -180,11 +192,15 @@ export default function ReservationFormModal({
                     signal: controller.signal,
                     cache: "no-store",
                 });
-                if (!res.ok) return;
+                if (!res.ok) {
+                    setOverlapConflicts([]);
+                    return;
+                }
                 const json = await res.json();
-                if (json?.ok && Array.isArray(json.data)) setOverlapConflicts(json.data);
-            } catch {
-                // Silencioso: el aviso es opcional.
+                setOverlapConflicts(json?.ok && Array.isArray(json.data) ? json.data : []);
+            } catch (err: any) {
+                // Silencioso: si la consulta falla no se muestra nada (el servidor valida igual al guardar).
+                if (err?.name !== "AbortError") setOverlapConflicts([]);
             }
         }, 400);
 
@@ -193,6 +209,46 @@ export default function ReservationFormModal({
             controller.abort();
         };
     }, [isOpen, formFulfillmentType, formRoomId, formCheckIn, formCheckOut, reservationToEdit]);
+
+    // Rol del usuario (desde /api/me) para ofrecer "Autorizar solapamiento" solo a superadmin.
+    // El servidor vuelve a verificar el rol al guardar; esto es solo presentación.
+    useEffect(() => {
+        if (!isOpen) return;
+        let cancelled = false;
+        fetch("/api/me", { cache: "no-store" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((b) => {
+                if (!cancelled) setIsSuperadmin(b?.role === "superadmin");
+            })
+            .catch(() => {
+                if (!cancelled) setIsSuperadmin(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen]);
+
+    // Al abrir el formulario se reinicia la autorización y el pop-up.
+    useEffect(() => {
+        if (isOpen) {
+            setAllowOverlap(false);
+            setShowOverlapModal(false);
+            lastShownOverlapKeyRef.current = "";
+        }
+    }, [isOpen, (reservationToEdit as any)?.id]);
+
+    // Pop-up una sola vez por cada conjunto distinto de conflictos (no en cada tecla).
+    useEffect(() => {
+        if (overlapConflicts.length === 0) return;
+        const key = overlapConflicts.map((c) => c.id).sort((a, b) => a - b).join(",");
+        if (key !== lastShownOverlapKeyRef.current) {
+            lastShownOverlapKeyRef.current = key;
+            setAllowOverlap(false); // un conjunto nuevo de conflictos requiere autorizar de nuevo
+            setShowOverlapModal(true);
+        }
+    }, [overlapConflicts]);
+
+    const overlapBlocked = overlapConflicts.length > 0 && !(isSuperadmin && allowOverlap);
 
     const overlapRoomLabel = useMemo(() => {
         const room = rooms.find((r) => String(r.id) === String(formRoomId));
@@ -215,6 +271,12 @@ export default function ReservationFormModal({
         };
         return s ? map[s] ?? s : "sin estado";
     };
+
+    const conflictLines = overlapConflicts.map((c) => (
+        <p key={c.id}>
+            Atención: la {overlapRoomLabel} ya tiene una reserva del {formatDMY(c.check_in)} al {formatDMY(c.check_out)} ({c.code ?? `#${c.id}`}, {c.guest_name ?? "sin huésped"}, {overlapStatusLabel(c.status)})
+        </p>
+    ));
 
     const filteredGuests = useMemo(() => {
         if (!formGuestSearch) return [];
@@ -574,6 +636,8 @@ export default function ReservationFormModal({
 
             // External Referral
             fulfillment_type: formFulfillmentType,
+            // Solo si un superadmin lo autorizó; el servidor lo vuelve a verificar con su propio rol.
+            allow_overlap: isSuperadmin && allowOverlap ? true : undefined,
             external_lodging_name: formFulfillmentType === "EXTERNAL" ? formExternalLodgingName : undefined,
             external_sale_total: formFulfillmentType === "EXTERNAL" ? Number(formExternalSaleTotal) : undefined,
             external_supplier_cost_total: formFulfillmentType === "EXTERNAL" ? Number(formExternalSupplierCostTotal) : undefined,
@@ -624,6 +688,15 @@ export default function ReservationFormModal({
             }
 
             const data = await res.json();
+            if (res.status === 409 && data?.error === "habitacion_ocupada") {
+                // Cambió algo entre la consulta y el guardado: se muestra el mismo pop-up y el formulario sigue abierto.
+                const list = Array.isArray(data.conflicts) ? data.conflicts : [];
+                setOverlapConflicts(list);
+                lastShownOverlapKeyRef.current = list.map((c: any) => c.id).sort((a: number, b: number) => a - b).join(",");
+                setAllowOverlap(false);
+                setShowOverlapModal(true);
+                return { ok: false, error: "habitacion_ocupada" };
+            }
             if (!data.ok) {
                 return { ok: false, error: data.error || "Error al guardar la reserva" };
             }
@@ -642,6 +715,10 @@ export default function ReservationFormModal({
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (submitLockRef.current) return;
+        if (overlapBlocked) {
+            setShowOverlapModal(true);
+            return;
+        }
         submitLockRef.current = true;
 
         const toastId = toast.loading(
@@ -657,7 +734,8 @@ export default function ReservationFormModal({
         }
 
         if (!result.ok) {
-            toast.error(result.error, { id: toastId });
+            if (result.error === "habitacion_ocupada") toast.dismiss(toastId);
+            else toast.error(result.error, { id: toastId });
             setIsSubmitting(false);
             submitLockRef.current = false;
             return;
@@ -678,6 +756,10 @@ export default function ReservationFormModal({
 
     const handleSaveAndSendVoucher = async () => {
         if (submitLockRef.current) return;
+        if (overlapBlocked) {
+            setShowOverlapModal(true);
+            return;
+        }
 
         // Validar email
         if (!formGuestEmail || !formGuestEmail.trim()) {
@@ -697,7 +779,8 @@ export default function ReservationFormModal({
             result = { ok: false, error: err?.message || "Error al guardar la reserva" };
         }
         if (!result.ok) {
-            toast.error(result.error, { id: toastId });
+            if (result.error === "habitacion_ocupada") toast.dismiss(toastId);
+            else toast.error(result.error, { id: toastId });
             setIsSubmitting(false);
             submitLockRef.current = false;
             return;
@@ -946,6 +1029,29 @@ export default function ReservationFormModal({
                                             </>
                                         )}
                                     </div>
+
+                                    {/* SOLAPAMIENTO: aviso rojo justo bajo fechas y habitación */}
+                                    {overlapConflicts.length > 0 && (
+                                        <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 space-y-1" role="alert">
+                                            <p className="font-semibold">Habitación ocupada</p>
+                                            {conflictLines}
+                                        </div>
+                                    )}
+                                    {overlapConflicts.length > 0 && isSuperadmin && allowOverlap && (
+                                        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="font-semibold">Solapamiento autorizado</p>
+                                                <p>La reserva se guardará dejando constancia en las notas.</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setAllowOverlap(false)}
+                                                className="shrink-0 underline font-medium"
+                                            >
+                                                Desactivar
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                                     <div>
@@ -1532,17 +1638,6 @@ export default function ReservationFormModal({
                         </div>
                     </div>
 
-                    {/* AVISO DE SOLAPAMIENTO (no bloquea el guardado) */}
-                    {overlapConflicts.length > 0 && (
-                        <div className="mx-6 mb-3 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800" role="alert">
-                            {overlapConflicts.map((c) => (
-                                <p key={c.id}>
-                                    Atención: la {overlapRoomLabel} ya tiene una reserva del {formatDMY(c.check_in)} al {formatDMY(c.check_out)} ({c.code ?? `#${c.id}`}, {c.guest_name ?? "sin huésped"}, {overlapStatusLabel(c.status)})
-                                </p>
-                            ))}
-                        </div>
-                    )}
-
                     {/* FOOTER */}
                     <div className="p-6 border-t bg-gray-50 rounded-b-xl flex justify-between items-center sticky bottom-0 z-10">
                         <div className="text-sm text-gray-500 flex items-center gap-3">
@@ -1605,7 +1700,7 @@ export default function ReservationFormModal({
                             {/* BOTÓN: GUARDAR */}
                             <button
                                 type="submit"
-                                disabled={isSubmitting || isDeleting}
+                                disabled={isSubmitting || isDeleting || overlapBlocked}
                                 className="px-6 py-2.5 border border-blue-600 text-blue-600 bg-white font-bold rounded-lg hover:bg-blue-50 transition-colors text-sm disabled:opacity-60"
                             >
                                 {isSubmitting && !isSendingEmail ? "Guardando..." : "Guardar"}
@@ -1615,7 +1710,7 @@ export default function ReservationFormModal({
                             <button
                                 type="button"
                                 onClick={handleSaveAndSendVoucher}
-                                disabled={isSubmitting || isDeleting}
+                                disabled={isSubmitting || isDeleting || overlapBlocked}
                                 className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg transition-transform active:scale-95 text-sm disabled:opacity-60 flex items-center gap-2"
                             >
                                 <Mail size={16} className="text-blue-100" />
@@ -1627,6 +1722,46 @@ export default function ReservationFormModal({
                     </div>
                 </form >
             </div >
+
+            {/* POP-UP: HABITACIÓN OCUPADA */}
+            {showOverlapModal && overlapConflicts.length > 0 && (
+                <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                        <h3 className="text-lg font-bold text-red-700">Habitación ocupada</h3>
+                        <p className="mt-2 text-sm text-gray-700">Esta habitación ya tiene reserva en esas fechas.</p>
+                        <ul className="mt-3 space-y-2 text-sm text-gray-800 max-h-60 overflow-y-auto">
+                            {overlapConflicts.map((c) => (
+                                <li key={c.id} className="rounded border border-red-200 bg-red-50 p-2">
+                                    <b>{c.code ?? `#${c.id}`}</b> · {c.guest_name ?? "sin huésped"} · {overlapStatusLabel(c.status)}
+                                    <br />
+                                    {formatDMY(c.check_in)} al {formatDMY(c.check_out)}
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="mt-5 flex justify-end gap-3">
+                            {isSuperadmin && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setAllowOverlap(true);
+                                        setShowOverlapModal(false);
+                                    }}
+                                    className="px-4 py-2 border border-amber-500 text-amber-700 font-semibold rounded-lg hover:bg-amber-50 text-sm"
+                                >
+                                    Autorizar solapamiento
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setShowOverlapModal(false)}
+                                className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-sm"
+                            >
+                                Cambiar datos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* QUICK CREATE GUEST SUB-MODAL */}
             {
