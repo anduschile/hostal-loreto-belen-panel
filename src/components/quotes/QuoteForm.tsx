@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import RangeCalendar from "@/components/quotes/RangeCalendar";
 import {
     COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, MAX_NIGHTS_PER_LINE, OCCUPANCIES, OCCUPANCY_LABELS, addDays, calculateQuote, discountLabel,
-    describeDates, effectiveDates, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, validateDates, weekdayOf,
+    describeDates, effectiveDates, normalizePassengers, passengersError, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, validateDates, weekdayOf,
     type DiscountMode, type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
 import type { QuoteRow } from "@/lib/quotes/service";
@@ -27,6 +27,7 @@ type FormLine = {
     rStart: string; rEnd: string;                      // modo Rango: entrada y salida de la línea
     weekdays: number[]; from: string; to: string;      // modo Recurrente (0 = domingo)
     dates: string[];
+    passengers: string;                                // un pasajero (o pareja separada con /) por renglón
 };
 
 const WEEKDAY_BUTTONS: { n: number; label: string; title: string }[] = [
@@ -36,7 +37,7 @@ const WEEKDAY_BUTTONS: { n: number; label: string; title: string }[] = [
 
 const blankLine = (rangeStart = "", rangeEnd = ""): FormLine => ({
     occupancy: "doble", rooms: "1", rate: "", mode: "rango", rStart: rangeStart, rEnd: rangeEnd,
-    weekdays: [], from: "", to: "", dates: rangeDates(rangeStart, rangeEnd),
+    weekdays: [], from: "", to: "", dates: rangeDates(rangeStart, rangeEnd), passengers: "",
 });
 
 /** Línea guardada -> estado del formulario. Líneas antiguas (sin dates) usan el rango de la cotización. */
@@ -49,6 +50,7 @@ function lineFromRow(l: QuoteRow["lines"][number], q: QuoteRow): FormLine {
         mode: contiguous || dates.length === 0 ? "rango" : "recurrente",
         rStart: first, rEnd: first ? addDays(last, 1) : "",
         weekdays: Array.from(new Set(dates.map(weekdayOf))), from: first, to: last, dates,
+        passengers: normalizePassengers(l.passengers).join("\n"),
     };
 }
 
@@ -189,7 +191,7 @@ export default function QuoteForm({
                     company_id: company?.id ?? null, company_name: companyName, company_rut: rut, contact_name: contact, contact_email: email,
                     ...(periodFromDates(lines.flatMap((l) => l.dates)) ?? { check_in: "", check_out: "" }), validity_days: Number(validity), conditions,
                     discount_mode: effMode, discount_type: manType, discount_value: Number(manValue) || 0, discount_reason: manReason,
-                    lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), dates: l.dates, rate_override: l.rate === "" ? null : Number(l.rate) })),
+                    lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), dates: l.dates, rate_override: l.rate === "" ? null : Number(l.rate), passengers: l.passengers.split("\n") })),
                 }),
             });
             const json = await res.json();
@@ -313,6 +315,22 @@ export default function QuoteForm({
                                         )}
                                         {(tooMany || (lineErrors[i] && l.dates.length > 0)) && <div className="text-xs text-red-600">{lineErrors[i]}</div>}
                                         {l.dates.length === 0 && <div className="text-xs text-amber-600">Elige las fechas de esta línea.</div>}
+                                        {(() => {
+                                            const list = normalizePassengers(l.passengers.split("\n"));
+                                            const perr = passengersError(list);
+                                            return (
+                                                <div>
+                                                    <div className="flex justify-between items-baseline">
+                                                        <label className="text-xs text-slate-500">Pasajeros (opcional)</label>
+                                                        <span className="text-xs text-slate-500">{list.length} {list.length === 1 ? "pasajero" : "pasajeros"}</span>
+                                                    </div>
+                                                    <textarea rows={3} value={l.passengers} onChange={(e) => setLine(i, { passengers: e.target.value })} className={input} placeholder={"Maximiliano Rojas / Cristian Jara\nJuan Pérez"} />
+                                                    <div className="text-xs text-slate-400">Una habitación por línea. Si comparten habitación, sepáralos con /</div>
+                                                    {perr && <div className="text-xs text-red-600">{perr}</div>}
+                                                    {!perr && list.length > (Number(l.rooms) || 0) && <div className="text-xs text-amber-600">Hay más entradas ({list.length}) que habitaciones ({Number(l.rooms) || 0}) en esta línea.</div>}
+                                                </div>
+                                            );
+                                        })()}
                                         {r?.rate_missing && <div className="text-xs text-amber-600 inline-flex items-center gap-1"><AlertTriangle size={13} /> tarifa sin cargar — escríbela a mano</div>}
                                     </div>
                                 </div>

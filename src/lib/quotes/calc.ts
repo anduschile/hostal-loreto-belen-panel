@@ -27,6 +27,8 @@ export type QuoteLineInput = {
     dates?: string[] | null;
     /** Tarifa escrita a mano. Si es > 0 pisa la de la tabla. */
     rate_override?: number | null;
+    /** Ocupantes por habitación (opcional): un string por habitación; si comparten, se separan con « / ». */
+    passengers?: string[] | null;
 };
 
 export type QuoteLineResult = {
@@ -372,6 +374,39 @@ export function stayText(lines: { dates?: string[] | null }[], checkIn?: string 
 export function formatListDate(iso: string, now: Date = new Date()): string {
     const p = parts(iso);
     return `${p.d} ${MONTHS_SHORT_ES[p.m]}${p.y !== now.getFullYear() ? ` ${p.y}` : ""}`;
+}
+
+/** Límites de pasajeros por línea. Superarlos se RECHAZA con un error (no se trunca en silencio). */
+export const MAX_PASSENGER_ENTRIES = 200;
+export const MAX_PASSENGER_CHARS = 160;
+
+/**
+ * Limpia la lista de pasajeros de una línea: ignora lo que no sea un arreglo; descarta los elementos que no
+ * sean texto; elimina caracteres de control; recorta espacios y descarta entradas vacías.
+ * No aplica límites (ver passengersError).
+ */
+export function normalizePassengers(v: unknown): string[] {
+    if (!Array.isArray(v)) return [];
+    const out: string[] = [];
+    for (const x of v) {
+        if (typeof x !== "string") continue;
+        // eslint-disable-next-line no-control-regex
+        const t = x.replace(/[ --]/g, "").trim();
+        if (t) out.push(t);
+    }
+    return out;
+}
+
+/** Mensaje de error si la lista (ya normalizada) supera los límites; null si está bien. */
+export function passengersError(list: string[]): string | null {
+    if (list.length > MAX_PASSENGER_ENTRIES) return `Una línea admite como máximo ${MAX_PASSENGER_ENTRIES} entradas de pasajeros.`;
+    if (list.some((p) => p.length > MAX_PASSENGER_CHARS)) return `Cada entrada de pasajeros admite como máximo ${MAX_PASSENGER_CHARS} caracteres.`;
+    return null;
+}
+
+/** «1. A / B · 2. C · 3. D» (numerado por habitación). Vacío si no hay pasajeros. */
+export function passengersText(v: unknown): string {
+    return normalizePassengers(v).map((p, i) => `${i + 1}. ${p}`).join(" · ");
 }
 
 export function formatQuoteCode(n: number): string {
