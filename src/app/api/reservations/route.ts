@@ -10,6 +10,8 @@ import {
     ReservationSchema,
     ReservationUpdateSchema,
 } from "@/lib/validators/reservations";
+import { guardOverlap, fetchStoredReservation } from "@/lib/reservations/overlapGuard";
+import { appendNote } from "@/lib/reservations/overlap";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +67,16 @@ export async function POST(req: Request) {
         // En data layer `mapToDb` lo pasamos. Si la DB admite null, bien.
         // Si no, la DB fallará. Asumimos que la migración corrió y room_id es nullable.
 
+        // Validación de solapamiento en el servidor (409 habitacion_ocupada si hay conflicto).
+        const guard = await guardOverlap({
+            prev: null,
+            next: parsed,
+            excludeId: null,
+            allowOverlap: body.allow_overlap === true,
+        });
+        if ("response" in guard) return guard.response;
+        if (guard.notesLine) parsed.notes = appendNote(parsed.notes, guard.notesLine);
+
         const created = await createReservation(parsed);
 
         // --- TRIGGER PAGOS EXTERNOS ---
@@ -100,6 +112,17 @@ export async function PUT(req: Request) {
         }
 
         const parsed = ReservationUpdateSchema.parse(body);
+
+        // Solo se valida si cambió habitación/fechas/estado hacia uno que bloquea.
+        const prev = await fetchStoredReservation(parsed.id);
+        const guard = await guardOverlap({
+            prev,
+            next: parsed,
+            excludeId: parsed.id,
+            allowOverlap: body.allow_overlap === true,
+        });
+        if ("response" in guard) return guard.response;
+        if (guard.notesLine) parsed.notes = appendNote(parsed.notes, guard.notesLine);
 
         const updated = await updateReservation(parsed.id, parsed);
 
