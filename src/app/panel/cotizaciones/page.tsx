@@ -7,7 +7,7 @@ import { Plus, Loader2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import QuoteForm, { type FormCompany, type FormSettings } from "@/components/quotes/QuoteForm";
-import { DEFAULT_CONDITIONS, DEFAULT_VALIDITY_DAYS, QUOTE_STATUSES, emptyRates, formatQuoteCode, formatListDate, type RateTable } from "@/lib/quotes/calc";
+import { DEFAULT_CONDITIONS, DEFAULT_VALIDITY_DAYS, QUOTE_STATUSES, emptyRates, formatQuoteCode, formatListDate, formatDateDMY, type RateTable } from "@/lib/quotes/calc";
 import type { QuoteRow } from "@/lib/quotes/service";
 import { STATUS_STYLE } from "@/components/quotes/statusStyle";
 
@@ -93,7 +93,7 @@ function CotizacionesInner() {
                                     <td className="p-3">{q.company_name}<div className="text-xs text-slate-400">{q.contact_email}</div></td>
                                     <td className="p-3">{formatListDate(q.check_in)} → {formatListDate(q.check_out)}</td>
                                     <td className="p-3 text-right">{money(q.total)}</td>
-                                    <td className="p-3">{q.valid_until ?? "-"}</td>
+                                    <td className="p-3">{q.valid_until ? formatDateDMY(q.valid_until) : "-"}</td>
                                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                                         <select value={q.status} onChange={(e) => changeStatus(q.id, e.target.value)} className={`text-xs rounded-full px-2 py-1 border-0 ${STATUS_STYLE[q.status]}`}>
                                             {QUOTE_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}

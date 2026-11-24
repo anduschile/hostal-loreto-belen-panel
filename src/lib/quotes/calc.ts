@@ -391,7 +391,7 @@ export function normalizePassengers(v: unknown): string[] {
     for (const x of v) {
         if (typeof x !== "string") continue;
         // eslint-disable-next-line no-control-regex
-        const t = x.replace(/[ --]/g, "").trim();
+        const t = x.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
         if (t) out.push(t);
     }
     return out;
@@ -407,6 +407,12 @@ export function passengersError(list: string[]): string | null {
 /** «1. A / B · 2. C · 3. D» (numerado por habitación). Vacío si no hay pasajeros. */
 export function passengersText(v: unknown): string {
     return normalizePassengers(v).map((p, i) => `${i + 1}. ${p}`).join(" · ");
+}
+
+/** «2026-11-29» -> «29/11/2026». Trabaja sobre el texto (sin crear un Date), así la fecha no se corre de día. */
+export function formatDateDMY(iso?: string | null): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso ?? "");
 }
 
 export function formatQuoteCode(n: number): string {

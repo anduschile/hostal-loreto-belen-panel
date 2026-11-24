@@ -5,7 +5,7 @@ import { Trash2, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import RangeCalendar from "@/components/quotes/RangeCalendar";
 import {
-    COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, MAX_NIGHTS_PER_LINE, OCCUPANCIES, OCCUPANCY_LABELS, addDays, calculateQuote, discountLabel,
+    COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, MAX_NIGHTS_PER_LINE, OCCUPANCIES, OCCUPANCY_LABELS, addDays, calculateQuote, discountLabel, formatDateDMY,
     describeDates, effectiveDates, normalizePassengers, passengersError, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, validateDates, weekdayOf,
     type DiscountMode, type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
@@ -310,7 +310,7 @@ export default function QuoteForm({
                                         {l.dates.length > 0 && (
                                             <details className="text-xs text-slate-500">
                                                 <summary className="cursor-pointer">Ver las {l.dates.length} fechas</summary>
-                                                <div className="mt-1 max-h-24 overflow-y-auto">{[...l.dates].sort().join(", ")}</div>
+                                                <div className="mt-1 max-h-24 overflow-y-auto">{[...l.dates].sort().map(formatDateDMY).join(", ")}</div>
                                             </details>
                                         )}
                                         {(tooMany || (lineErrors[i] && l.dates.length > 0)) && <div className="text-xs text-red-600">{lineErrors[i]}</div>}
