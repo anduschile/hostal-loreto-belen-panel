@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
     X,
     Calendar,
@@ -124,6 +124,19 @@ export default function ReservationFormModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCreatingGuest, setIsCreatingGuest] = useState(false);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
+    // Candado síncrono contra doble clic (el estado de React se actualiza tras el render).
+    const submitLockRef = useRef(false);
+
+    // Aviso (no bloqueante) de solapamiento con otras reservas de la misma habitación
+    type OverlapConflict = {
+        id: number;
+        code: string | null;
+        status: string | null;
+        check_in: string;
+        check_out: string;
+        guest_name: string | null;
+    };
+    const [overlapConflicts, setOverlapConflicts] = useState<OverlapConflict[]>([]);
 
     // External Referral
     const [formFulfillmentType, setFormFulfillmentType] = useState<"INTERNAL" | "EXTERNAL">("INTERNAL");
@@ -143,6 +156,65 @@ export default function ReservationFormModal({
         const diff = differenceInDays(parseISO(formCheckOut), parseISO(formCheckIn));
         return diff > 0 ? diff : 0;
     }, [formCheckIn, formCheckOut]);
+
+    // Aviso de solapamiento: consulta con debounce cuando cambian habitación o fechas.
+    // No bloquea el guardado; si la consulta falla, simplemente no se muestra nada.
+    useEffect(() => {
+        setOverlapConflicts([]);
+        if (!isOpen || formFulfillmentType !== "INTERNAL" || !formRoomId) return;
+        const isoDay = /^\d{4}-\d{2}-\d{2}$/;
+        if (!isoDay.test(formCheckIn) || !isoDay.test(formCheckOut) || formCheckOut <= formCheckIn) return;
+
+        const controller = new AbortController();
+        const timer = setTimeout(async () => {
+            try {
+                const params = new URLSearchParams({
+                    room_id: String(formRoomId),
+                    check_in: formCheckIn,
+                    check_out: formCheckOut,
+                });
+                const editingId = (reservationToEdit as any)?.id;
+                if (editingId) params.set("exclude_id", String(editingId));
+
+                const res = await fetch(`/api/reservations/overlaps?${params.toString()}`, {
+                    signal: controller.signal,
+                    cache: "no-store",
+                });
+                if (!res.ok) return;
+                const json = await res.json();
+                if (json?.ok && Array.isArray(json.data)) setOverlapConflicts(json.data);
+            } catch {
+                // Silencioso: el aviso es opcional.
+            }
+        }, 400);
+
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
+    }, [isOpen, formFulfillmentType, formRoomId, formCheckIn, formCheckOut, reservationToEdit]);
+
+    const overlapRoomLabel = useMemo(() => {
+        const room = rooms.find((r) => String(r.id) === String(formRoomId));
+        const name = (room?.name ?? "").trim();
+        if (!name) return "habitación seleccionada";
+        return /^hab/i.test(name) ? name : `Habitación ${name}`;
+    }, [rooms, formRoomId]);
+
+    const formatDMY = (iso: string) => {
+        const [y, m, d] = iso.slice(0, 10).split("-");
+        return `${d}/${m}/${y}`;
+    };
+
+    const overlapStatusLabel = (s: string | null) => {
+        const map: Record<string, string> = {
+            pending: "Pendiente",
+            confirmed: "Confirmada",
+            checked_in: "Check-in",
+            blocked: "Bloqueada",
+        };
+        return s ? map[s] ?? s : "sin estado";
+    };
 
     const filteredGuests = useMemo(() => {
         if (!formGuestSearch) return [];
@@ -569,17 +641,25 @@ export default function ReservationFormModal({
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
+        if (submitLockRef.current) return;
+        submitLockRef.current = true;
 
         const toastId = toast.loading(
             reservationToEdit ? "Guardando cambios..." : "Creando reserva..."
         );
         setIsSubmitting(true);
 
-        const result = await handleSaveInternal();
+        let result: Awaited<ReturnType<typeof handleSaveInternal>>;
+        try {
+            result = await handleSaveInternal();
+        } catch (err: any) {
+            result = { ok: false, error: err?.message || "Error al guardar la reserva" };
+        }
 
         if (!result.ok) {
             toast.error(result.error, { id: toastId });
             setIsSubmitting(false);
+            submitLockRef.current = false;
             return;
         }
 
@@ -593,23 +673,33 @@ export default function ReservationFormModal({
         onSuccess();
         onClose();
         setIsSubmitting(false);
+        submitLockRef.current = false;
     };
 
     const handleSaveAndSendVoucher = async () => {
+        if (submitLockRef.current) return;
+
         // Validar email
         if (!formGuestEmail || !formGuestEmail.trim()) {
             toast.error("Para enviar el voucher, debe ingresar un correo electrónico del huésped.");
             return;
         }
 
+        submitLockRef.current = true;
         const toastId = toast.loading("Guardando y enviando voucher...");
         setIsSubmitting(true);
 
         // 1. Guardar
-        const result = await handleSaveInternal();
+        let result: Awaited<ReturnType<typeof handleSaveInternal>>;
+        try {
+            result = await handleSaveInternal();
+        } catch (err: any) {
+            result = { ok: false, error: err?.message || "Error al guardar la reserva" };
+        }
         if (!result.ok) {
             toast.error(result.error, { id: toastId });
             setIsSubmitting(false);
+            submitLockRef.current = false;
             return;
         }
 
@@ -617,6 +707,7 @@ export default function ReservationFormModal({
         if (!rId) {
             toast.error("Error: No se obtuvo ID de reserva", { id: toastId });
             setIsSubmitting(false);
+            submitLockRef.current = false;
             return;
         }
 
@@ -645,6 +736,7 @@ export default function ReservationFormModal({
             onClose();
         } finally {
             setIsSubmitting(false);
+            submitLockRef.current = false;
         }
     };
 
@@ -1439,6 +1531,17 @@ export default function ReservationFormModal({
                             </div>
                         </div>
                     </div>
+
+                    {/* AVISO DE SOLAPAMIENTO (no bloquea el guardado) */}
+                    {overlapConflicts.length > 0 && (
+                        <div className="mx-6 mb-3 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800" role="alert">
+                            {overlapConflicts.map((c) => (
+                                <p key={c.id}>
+                                    Atención: la {overlapRoomLabel} ya tiene una reserva del {formatDMY(c.check_in)} al {formatDMY(c.check_out)} ({c.code ?? `#${c.id}`}, {c.guest_name ?? "sin huésped"}, {overlapStatusLabel(c.status)})
+                                </p>
+                            ))}
+                        </div>
+                    )}
 
                     {/* FOOTER */}
                     <div className="p-6 border-t bg-gray-50 rounded-b-xl flex justify-between items-center sticky bottom-0 z-10">
