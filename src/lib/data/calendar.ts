@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { overlapMap } from "@/lib/reservations/overlap";
 
 export type CalendarRoom = {
@@ -84,6 +85,7 @@ export async function getCalendarData(
     // Regla correcta de cruce:
     //   check_in <= to  AND  check_out >= from
     // así la reserva aparece en día, semana y mes.
+    const buildResQuery = () => {
     let resQuery = supabase
         .from("hostal_reservations")
         .select(
@@ -112,10 +114,14 @@ export async function getCalendarData(
     if (filters?.company_id) {
         resQuery = resQuery.eq("company_id", filters.company_id);
     }
+    return resQuery.order("check_in", { ascending: true }).order("id", { ascending: true });
+    };
 
-    const { data: resData, error: resError } = await resQuery;
-
-    if (resError) {
+    // Paginado: un rango largo (mes/año) puede superar el tope de 1.000 filas por consulta.
+    let resData: any[];
+    try {
+        resData = await fetchAll<any>((from, to) => buildResQuery().range(from, to), { label: "getCalendarData" });
+    } catch (resError: any) {
         console.error("Error fetching reservations for calendar:", resError);
         throw new Error(resError.message);
     }

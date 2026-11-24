@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import type { Payment, PaymentInsert } from "@/types/hostal";
 
 const PAYMENTS_TABLE = "hostal_payments";
@@ -32,6 +33,7 @@ export async function getPayments(
     return d.toISOString().split('T')[0];
   }
 
+  const buildQuery = () => {
   let query = supabase
     .from(PAYMENTS_TABLE)
     .select(`
@@ -44,7 +46,8 @@ export async function getPayments(
         hostal_companies (name)
       )
     `)
-    .order("payment_date", { ascending: false });
+    .order("payment_date", { ascending: false })
+    .order("id", { ascending: false });
 
   if (fromDate) {
     query = query.gte("payment_date", fromDate);
@@ -54,10 +57,13 @@ export async function getPayments(
     const nextDay = getNextDay(toDate);
     query = query.lt("payment_date", nextDay);
   }
+  return query;
+  };
 
-  const { data, error } = await query;
-
-  if (error) {
+  let data: any[];
+  try {
+    data = await fetchAll<any>((from, to) => buildQuery().range(from, to), { label: "getPayments" });
+  } catch (error: any) {
     console.error("Error getPayments:", error);
     throw new Error(error.message);
   }

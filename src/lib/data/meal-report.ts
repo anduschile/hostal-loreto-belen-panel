@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 
 export interface MealReportRow {
   fecha: string;
@@ -29,20 +30,23 @@ export async function getMealReportData(
   const client = await createClient();
 
   // Step 1: Get meal service IDs in the date range
-  let mealServicesQuery = client
-    .from("hostal_meal_services")
-    .select("id")
-    .gte("fecha", fromDate)
-    .lte("fecha", toDate);
+  const buildServicesQuery = () => {
+    let q = client
+      .from("hostal_meal_services")
+      .select("id")
+      .gte("fecha", fromDate)
+      .lte("fecha", toDate);
+    if (tipoServicio && tipoServicio !== "ambos") {
+      q = q.eq("tipo_servicio", tipoServicio);
+    }
+    return q.order("id", { ascending: true });
+  };
 
-  if (tipoServicio && tipoServicio !== "ambos") {
-    mealServicesQuery = mealServicesQuery.eq("tipo_servicio", tipoServicio);
-  }
-
-  const { data: mealServices, error: mealServicesError } = await mealServicesQuery;
-
-  if (mealServicesError) {
-    throw new Error(`Failed to fetch meal services: ${mealServicesError.message}`);
+  let mealServices: any[];
+  try {
+    mealServices = await fetchAll<any>((from, to) => buildServicesQuery().range(from, to), { label: "mealReport:services" });
+  } catch (e: any) {
+    throw new Error(`Failed to fetch meal services: ${e.message}`);
   }
 
   const mealServiceIds = (mealServices || []).map((ms: any) => ms.id);
@@ -52,9 +56,10 @@ export async function getMealReportData(
   }
 
   // Step 2: Get meal consumption records for those meal services (regardless of choice status)
-  let query = client
-    .from("hostal_meal_consumption")
-    .select(`
+  const buildQuery = () => {
+    let query = client
+      .from("hostal_meal_consumption")
+      .select(`
       meal_service_id,
       hostal_meal_services(fecha, tipo_servicio, menu_a_id, menu_b_id),
       hostal_guests(full_name),
@@ -62,15 +67,19 @@ export async function getMealReportData(
       precio_snapshot,
       eleccion
     `)
-    .in("meal_service_id", mealServiceIds);
+      .in("meal_service_id", mealServiceIds);
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+    return query.order("id", { ascending: true });
+  };
 
-  if (companyId) {
-    query = query.eq("company_id", companyId);
+  let data: any[];
+  try {
+    data = await fetchAll<any>((from, to) => buildQuery().range(from, to), { label: "mealReport:consumption" });
+  } catch (e: any) {
+    throw new Error(`Failed to fetch meal report: ${e.message}`);
   }
-
-  const { data, error } = await query;
-
-  if (error) throw new Error(`Failed to fetch meal report: ${error.message}`);
 
   // Fetch all menus to map IDs to names
   const { data: menus, error: menusError } = await client
@@ -116,24 +125,29 @@ export async function getMealReportSummary(
 ): Promise<MealReportSummary[]> {
   const client = await createClient();
 
-  let query = client
-    .from("hostal_meal_consumption")
-    .select(`
+  const buildQuery = () => {
+    let query = client
+      .from("hostal_meal_consumption")
+      .select(`
       hostal_meal_services(fecha, tipo_servicio),
       hostal_companies(name),
       precio_snapshot
     `)
-    .not("eleccion", "is", null)
-    .gte("hostal_meal_services.fecha", fromDate)
-    .lte("hostal_meal_services.fecha", toDate);
+      .not("eleccion", "is", null)
+      .gte("hostal_meal_services.fecha", fromDate)
+      .lte("hostal_meal_services.fecha", toDate);
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+    return query.order("id", { ascending: true });
+  };
 
-  if (companyId) {
-    query = query.eq("company_id", companyId);
+  let data: any[];
+  try {
+    data = await fetchAll<any>((from, to) => buildQuery().range(from, to), { label: "mealReport:summary" });
+  } catch (e: any) {
+    throw new Error(`Failed to fetch meal report summary: ${e.message}`);
   }
-
-  const { data, error } = await query;
-
-  if (error) throw new Error(`Failed to fetch meal report summary: ${error.message}`);
 
   // Group by company and tipo_servicio
   const grouped: { [key: string]: MealReportSummary } = {};
