@@ -96,3 +96,45 @@ export function exitAfterEntryChange(entry: string, exit: string): string {
     if (!parseIso(entry)) return exit;
     return !parseIso(exit) || exit <= entry ? nextDay(entry) : exit;
 }
+
+// ---- Calendario de rango (dos meses) ----
+
+const MONTHS_FULL = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+/** «Enero de 2027». */
+export function monthTitle(y: number, m: number): string {
+    return `${MONTHS_FULL[m - 1]} de ${y}`;
+}
+
+/** Mes (1..12) desplazado `k` meses. Sirve para las flechas ‹ › y para el segundo mes visible. */
+export function shiftMonth(y: number, m: number, k: number): { y: number; m: number } {
+    return addMonths(y, m, k);
+}
+
+/** Día de la semana (0 = domingo ... 6 = sábado), con números (algoritmo de Sakamoto). */
+export function weekdayOfYmd(y: number, m: number, d: number): number {
+    const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    const yy = m < 3 ? y - 1 : y;
+    return (yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) + t[m - 1] + d) % 7;
+}
+
+/** Cuadrícula de un mes con semana que parte en lunes: celdas vacías (null) al inicio y luego los días 1..N. */
+export function monthGrid(y: number, m: number): (number | null)[] {
+    const lead = (weekdayOfYmd(y, m, 1) + 6) % 7; // lunes = 0
+    return [...Array<null>(lead).fill(null), ...Array.from({ length: daysInMonth(y, m) }, (_, i) => i + 1)];
+}
+
+export type RangeMode = "rango" | "recurrente";
+
+/**
+ * Qué pasa con cada clic del calendario de rango.
+ *  - sin inicio, o con inicio y fin ya elegidos (tercer clic): el día pasa a ser el nuevo inicio y el fin se limpia.
+ *  - solo inicio: el día es el fin si es posterior al inicio. Si es el mismo día o anterior, pasa a ser el nuevo inicio,
+ *    salvo en modo Recurrente, donde «Hasta» puede ser igual a «Desde».
+ */
+export function nextRangeSelection(start: string, end: string, clicked: string, mode: RangeMode): { start: string; end: string } {
+    if (!start || end) return { start: clicked, end: "" };
+    if (clicked > start) return { start, end: clicked };
+    if (clicked === start && mode === "recurrente") return { start, end: clicked };
+    return { start: clicked, end: "" };
+}

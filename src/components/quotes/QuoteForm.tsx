@@ -3,13 +3,13 @@
 import { useMemo, useState } from "react";
 import { Trash2, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
-import RangeCalendar from "@/components/quotes/RangeCalendar";
+import DateRangeField from "@/components/quotes/DateRangeField";
 import {
     COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, MAX_NIGHTS_PER_LINE, OCCUPANCIES, OCCUPANCY_LABELS, addDays, calculateQuote, discountLabel, formatDateDMY,
     describeDates, effectiveDates, normalizePassengers, passengersError, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, validateDates, weekdayOf,
     type DiscountMode, type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
-import { endAfterFromChange, exitAfterEntryChange, extendTargets, monthShortcuts, nextDay, todayIso } from "@/lib/quotes/dateShortcuts";
+import { extendTargets, monthShortcuts, todayIso } from "@/lib/quotes/dateShortcuts";
 import type { QuoteRow } from "@/lib/quotes/service";
 
 export type FormCompany = {
@@ -159,10 +159,6 @@ export default function QuoteForm({
         const next = { weekdays: l.weekdays, from: l.from, to: l.to, ...patch };
         setLine(i, { mode: "recurrente", ...next, dates: recurringDates(next.from, next.to, next.weekdays) });
     };
-    // «Desde» (Recurrente): si «Hasta» falta o quedó antes, pasa al último día del mes de Desde.
-    const setFrom = (i: number, from: string) => setRecurring(i, { from, to: endAfterFromChange(from, lines[i].to) });
-    // «Entrada» (Rango): «Salida» es el día de salida (no cuenta como noche); si falta o no es posterior, queda 1 noche después.
-    const setEntry = (i: number, entry: string) => setRange(i, entry, exitAfterEntryChange(entry, lines[i].rEnd));
     const monthButtons = monthShortcuts(todayIso(), 6);
     const chip = "px-2 py-1 rounded-md text-xs font-medium border bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
     const toggleWeekday = (i: number, n: number) => {
@@ -250,10 +246,10 @@ export default function QuoteForm({
                         </button>
                         {showCalendar && (
                             <div className="flex flex-col md:flex-row gap-5">
-                                <RangeCalendar start={start} end={end} onChange={onGeneralRange} />
+                                <DateRangeField mode="rango" start={start} end={end} onChange={onGeneralRange} />
                                 <div className="text-sm text-slate-600 space-y-1">
-                                    <div>Entrada: <strong>{start || "—"}</strong></div>
-                                    <div>Salida: <strong>{end || "— (elige la fecha de salida)"}</strong></div>
+                                    <div>Entrada: <strong>{start ? formatDateDMY(start) : "—"}</strong></div>
+                                    <div>Salida: <strong>{end ? formatDateDMY(end) : "— (elige la fecha de salida)"}</strong></div>
                                     <p className="text-xs text-slate-400 max-w-56">Rellena las líneas que aún no tienen fechas y las líneas nuevas. Cada línea se puede cambiar por separado.</p>
                                 </div>
                             </div>
@@ -292,9 +288,9 @@ export default function QuoteForm({
                                             ))}
                                         </div>
                                         {l.mode === "rango" ? (
-                                            <div className="flex flex-wrap gap-3 items-end">
-                                                <div><label className="text-xs text-slate-500">Entrada</label><input type="date" value={l.rStart} onChange={(e) => setEntry(i, e.target.value)} className={input} /></div>
-                                                <div><label className="text-xs text-slate-500">Salida</label><input type="date" value={l.rEnd} min={l.rStart ? nextDay(l.rStart) : undefined} onChange={(e) => setRange(i, l.rStart, e.target.value)} className={input} /></div>
+                                            <div>
+                                                <label className="text-xs text-slate-500">Entrada → Salida</label>
+                                                <div><DateRangeField mode="rango" start={l.rStart} end={l.rEnd} onChange={(s, e) => setRange(i, s, e)} /></div>
                                             </div>
                                         ) : (
                                             <div className="space-y-2">
@@ -304,9 +300,9 @@ export default function QuoteForm({
                                                             className={`w-9 h-9 rounded-md text-sm font-medium border ${l.weekdays.includes(w.n) ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>{w.label}</button>
                                                     ))}
                                                 </div>
-                                                <div className="flex flex-wrap gap-3 items-end">
-                                                    <div><label className="text-xs text-slate-500">Desde</label><input type="date" value={l.from} onChange={(e) => setFrom(i, e.target.value)} className={input} /></div>
-                                                    <div><label className="text-xs text-slate-500">Hasta</label><input type="date" value={l.to} min={l.from || undefined} onChange={(e) => setRecurring(i, { to: e.target.value })} className={input} /></div>
+                                                <div>
+                                                    <label className="text-xs text-slate-500">Desde → Hasta</label>
+                                                    <div><DateRangeField mode="recurrente" start={l.from} end={l.to} onChange={(s, e) => setRecurring(i, { from: s, to: e })} /></div>
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Atajos por mes">
                                                     <span className="text-xs text-slate-500 mr-1">Mes:</span>

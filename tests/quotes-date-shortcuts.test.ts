@@ -67,3 +67,58 @@ test("todayIso usa la fecha local, sin pasar por UTC", () => {
     assert.equal(todayIso(new Date(2026, 0, 1, 0, 30)), "2026-01-01");
     assert.equal(todayIso(new Date(2026, 11, 31, 23, 59)), "2026-12-31");
 });
+
+import { monthGrid, monthTitle, nextRangeSelection, shiftMonth, weekdayOfYmd } from "../src/lib/quotes/dateShortcuts";
+
+test("clic con inicio vacío: el día es el inicio", () => {
+    assert.deepEqual(nextRangeSelection("", "", "2027-01-05", "rango"), { start: "2027-01-05", end: "" });
+    assert.deepEqual(nextRangeSelection("", "", "2027-01-05", "recurrente"), { start: "2027-01-05", end: "" });
+});
+
+test("segundo clic posterior: es el fin (Rango y Recurrente)", () => {
+    assert.deepEqual(nextRangeSelection("2027-01-05", "", "2027-02-28", "rango"), { start: "2027-01-05", end: "2027-02-28" });
+    assert.deepEqual(nextRangeSelection("2027-01-05", "", "2027-02-28", "recurrente"), { start: "2027-01-05", end: "2027-02-28" });
+});
+
+test("segundo clic en el mismo día: Rango lo toma como nuevo inicio; Recurrente lo acepta como fin", () => {
+    assert.deepEqual(nextRangeSelection("2027-01-05", "", "2027-01-05", "rango"), { start: "2027-01-05", end: "" });
+    assert.deepEqual(nextRangeSelection("2027-01-05", "", "2027-01-05", "recurrente"), { start: "2027-01-05", end: "2027-01-05" });
+});
+
+test("segundo clic anterior al inicio: ese día es el nuevo inicio (ambos modos)", () => {
+    assert.deepEqual(nextRangeSelection("2027-01-05", "", "2027-01-02", "rango"), { start: "2027-01-02", end: "" });
+    assert.deepEqual(nextRangeSelection("2027-01-05", "", "2027-01-02", "recurrente"), { start: "2027-01-02", end: "" });
+});
+
+test("tercer clic: empieza una selección nueva", () => {
+    assert.deepEqual(nextRangeSelection("2027-01-05", "2027-02-28", "2027-03-10", "rango"), { start: "2027-03-10", end: "" });
+    assert.deepEqual(nextRangeSelection("2027-01-05", "2027-02-28", "2027-01-01", "recurrente"), { start: "2027-01-01", end: "" });
+});
+
+test("cuadrícula del mes: febrero normal y bisiesto", () => {
+    const f27 = monthGrid(2027, 2);
+    assert.equal(f27.filter((x) => x !== null).length, 28);
+    const f28 = monthGrid(2028, 2);
+    assert.equal(f28.filter((x) => x !== null).length, 29);
+    assert.equal(f28[f28.length - 1], 29);
+});
+
+test("cuadrícula: mes que empieza en lunes (sin vacíos) y en domingo (6 vacíos)", () => {
+    assert.equal(weekdayOfYmd(2027, 2, 1), 1); // 1 feb 2027 = lunes
+    const lunes = monthGrid(2027, 2);
+    assert.equal(lunes[0], 1);
+    assert.equal(weekdayOfYmd(2026, 11, 1), 0); // 1 nov 2026 = domingo
+    const domingo = monthGrid(2026, 11);
+    assert.deepEqual(domingo.slice(0, 7), [null, null, null, null, null, null, 1]);
+    assert.equal(domingo.length, 6 + 30);
+    assert.equal(weekdayOfYmd(2027, 1, 1), 5); // 1 ene 2027 = viernes
+    assert.equal(monthGrid(2027, 1).slice(0, 5).filter((x) => x === null).length, 4);
+});
+
+test("título del mes y desplazamiento entre años", () => {
+    assert.equal(monthTitle(2027, 1), "Enero de 2027");
+    assert.equal(monthTitle(2026, 12), "Diciembre de 2026");
+    assert.deepEqual(shiftMonth(2026, 12, 1), { y: 2027, m: 1 });
+    assert.deepEqual(shiftMonth(2027, 1, -1), { y: 2026, m: 12 });
+    assert.deepEqual(shiftMonth(2027, 1, 13), { y: 2028, m: 2 });
+});
