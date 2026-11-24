@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { overlapMap } from "@/lib/reservations/overlap";
 
 export type CalendarRoom = {
     id: number;
@@ -34,6 +35,9 @@ export type CalendarReservation = {
     // External
     fulfillment_type?: string;
     external_lodging_name?: string | null;
+    // Marcado de solapamiento (calendario): códigos de las reservas con las que se cruza
+    hold_expires_at?: string | null;
+    overlaps_with?: string[];
 };
 
 export type CalendarData = {
@@ -155,6 +159,31 @@ export async function getCalendarData(
         fulfillment_type: r.fulfillment_type,
         external_lodging_name: r.external_lodging_name,
     }));
+
+    // hold_expires_at (solicitudes web provisorias): consulta aparte y tolerante a fallos.
+    const pendingIds = reservations.filter((r) => r.status === "pending").map((r) => r.id);
+    if (pendingIds.length > 0) {
+        try {
+            const { data: holds } = await supabase
+                .from("hostal_reservations")
+                .select("id, hold_expires_at")
+                .in("id", pendingIds)
+                .not("hold_expires_at", "is", null);
+            const byId = new Map<number, string>((holds ?? []).map((h: any) => [h.id, h.hold_expires_at]));
+            reservations.forEach((r) => {
+                if (byId.has(r.id)) r.hold_expires_at = byId.get(r.id);
+            });
+        } catch {
+            // sin hold_expires_at: se marca igual
+        }
+    }
+
+    // Marca las reservas que se solapan con otra de la misma habitación (misma regla que findOverlaps).
+    const overlaps = overlapMap(reservations as any[]);
+    reservations.forEach((r) => {
+        const others = overlaps.get(r.id);
+        if (others) r.overlaps_with = others;
+    });
 
     return { rooms, reservations };
 }

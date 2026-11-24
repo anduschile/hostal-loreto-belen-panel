@@ -44,6 +44,9 @@ export default function DaybookClient({ initialDate, entries }: Props) {
 
             if (!res.ok) {
                 const err = await res.json();
+                if (err.error === "habitacion_ocupada") {
+                    throw new Error("La habitación ya tiene una reserva en esas fechas; no se puede cambiar el estado.");
+                }
                 throw new Error(err.error || "Error al actualizar");
             }
 

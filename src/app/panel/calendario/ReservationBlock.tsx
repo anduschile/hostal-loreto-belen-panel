@@ -27,6 +27,7 @@ export default function ReservationBlock({ reservation, style, onClick, viewMode
     const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
     const blockRef = useRef<HTMLDivElement>(null);
     const baseClasses = STATUS_STYLES[reservation.status] || "bg-gray-100 text-gray-700 border-l-4 border-gray-400";
+    const overlapsWith = reservation.overlaps_with ?? [];
 
     const handleMouseEnter = (e: React.MouseEvent) => {
         setHover(true);
@@ -57,7 +58,7 @@ export default function ReservationBlock({ reservation, style, onClick, viewMode
     return (
         <div
             ref={blockRef}
-            className={`${style?.position === 'relative' ? 'relative w-full mb-1 min-h-[24px]' : 'absolute top-1 bottom-1'} rounded-r-md shadow-sm text-xs font-medium cursor-pointer transition-all duration-200 px-2 flex flex-col justify-center gap-0.5 z-10 overflow-hidden ${baseClasses} ${hover ? "z-30 shadow-lg -translate-y-0.5" : ""}`}
+            className={`${style?.position === 'relative' ? 'relative w-full mb-1 min-h-[24px]' : 'absolute top-1 bottom-1'} rounded-r-md shadow-sm text-xs font-medium cursor-pointer transition-all duration-200 px-2 flex flex-col justify-center gap-0.5 z-10 overflow-hidden ${baseClasses} ${hover ? "z-30 shadow-lg -translate-y-0.5" : ""} ${overlapsWith.length > 0 ? "ring-2 ring-inset ring-red-500" : ""}`}
             style={style || { position: 'relative', width: '100%', height: '100%' }}
             onClick={(e) => {
                 e.stopPropagation();
@@ -66,6 +67,16 @@ export default function ReservationBlock({ reservation, style, onClick, viewMode
             onMouseEnter={handleMouseEnter}
             onMouseLeave={() => setHover(false)}
         >
+            {/* --- SOLAPADA: etiqueta pequeña (no cambia el orden ni apila las barras) --- */}
+            {overlapsWith.length > 0 && (
+                <span
+                    className="absolute top-0 right-0 z-20 rounded-bl bg-red-600 px-1 text-[8px] font-bold leading-tight text-white"
+                    title={`Se solapa con: ${overlapsWith.join(", ")}`}
+                >
+                    Solapada
+                </span>
+            )}
+
             {/* --- CONTENT RENDER --- */}
             {isWide ? (
                 // DAY VIEW LAYOUT (Rich Card)
