@@ -169,6 +169,26 @@ export async function getReservations(filters: ReservationFilters = {}) {
     throw new Error(error.message);
   }
 
+  // hold_expires_at (solicitudes web provisorias): consulta aparte y tolerante a fallos,
+  // para no romper la lista si la columna no existe.
+  const rows: any[] = data || [];
+  const pendingIds = rows.filter((r) => r.status === "pending").map((r) => r.id);
+  if (pendingIds.length > 0) {
+    try {
+      const { data: holds } = await supabase
+        .from(TABLE_NAME)
+        .select("id, hold_expires_at")
+        .in("id", pendingIds)
+        .not("hold_expires_at", "is", null);
+      const byId = new Map<number, string>((holds ?? []).map((h: any) => [h.id, h.hold_expires_at]));
+      rows.forEach((r) => {
+        if (byId.has(r.id)) r.hold_expires_at = byId.get(r.id);
+      });
+    } catch {
+      // sin hold_expires_at: la lista se muestra igual
+    }
+  }
+
   console.log(
     "[getReservations] filtros:",
     filters,

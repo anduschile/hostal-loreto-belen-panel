@@ -7,12 +7,15 @@ import { es } from "date-fns/locale";
 import { Trash2, Edit2 } from "lucide-react";
 import ReservationFormModal from "@/components/reservations/ReservationFormModal";
 import { HostalRoom, Guest } from "@/types/hostal";
+import { formatSantiagoShort } from "@/lib/public-api/format";
 
 type Reservation = {
     id: number;
     check_in: string; // "YYYY-MM-DD"
     check_out: string; // "YYYY-MM-DD"
     status?: string | null;
+    source?: string | null;
+    hold_expires_at?: string | null;
     total_price?: number | null;
     hostal_rooms?: {
         name: string | null;
@@ -205,6 +208,11 @@ export default function ReservasList({ initialReservations, today, rooms, guests
                                     <div>
                                         <div className="text-sm font-semibold text-gray-900">
                                             {guestName}
+                                            {res.source === "web" && (
+                                                <span className="ml-2 align-middle rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                                                    Web
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="text-xs text-gray-600">
                                             {roomName} — {inLabel} → {outLabel}
@@ -212,6 +220,11 @@ export default function ReservasList({ initialReservations, today, rooms, guests
                                         {res.status && (
                                             <div className="text-[11px] uppercase tracking-wide text-gray-400 mt-1">
                                                 Estado: {res.status}
+                                                {res.status === "pending" && res.hold_expires_at && (
+                                                    <span className="ml-2 normal-case text-amber-600">
+                                                        vence {formatSantiagoShort(res.hold_expires_at)}
+                                                    </span>
+                                                )}
                                             </div>
                                         )}
                                     </div>
