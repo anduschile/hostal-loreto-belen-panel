@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --experimental-test-module-mocks --test tests/quotes.test.ts tests/quotes-dates.test.ts tests/quotes-date-shortcuts.test.ts tests/quotes-passengers.test.ts tests/quotes-rounding.test.ts tests/quotes-security.test.ts tests/public-api-schema.test.ts tests/public-api-http.test.ts tests/public-api-clientref.test.ts tests/public-api-emails.test.ts tests/reservations-overlap.test.ts tests/reservations-overlap-guard.test.ts"
+    "test": "node --import tsx --experimental-test-module-mocks --test tests/quotes.test.ts tests/quotes-dates.test.ts tests/quotes-date-shortcuts.test.ts tests/quotes-passengers.test.ts tests/quotes-rounding.test.ts tests/quotes-security.test.ts tests/public-api-schema.test.ts tests/public-api-http.test.ts tests/public-api-clientref.test.ts tests/public-api-emails.test.ts tests/reservations-overlap.test.ts tests/reservations-overlap-guard.test.ts tests/fetch-all.test.ts tests/reservations-range.test.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.1",
