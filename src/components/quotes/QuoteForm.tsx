@@ -9,7 +9,6 @@ import {
     describeDates, effectiveDates, normalizePassengers, passengersError, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, validateDates, weekdayOf,
     type DiscountMode, type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
-import { extendTargets, monthShortcuts, todayIso } from "@/lib/quotes/dateShortcuts";
 import type { QuoteRow } from "@/lib/quotes/service";
 
 export type FormCompany = {
@@ -159,8 +158,6 @@ export default function QuoteForm({
         const next = { weekdays: l.weekdays, from: l.from, to: l.to, ...patch };
         setLine(i, { mode: "recurrente", ...next, dates: recurringDates(next.from, next.to, next.weekdays) });
     };
-    const monthButtons = monthShortcuts(todayIso(), 6);
-    const chip = "px-2 py-1 rounded-md text-xs font-medium border bg-white text-slate-600 border-slate-300 hover:bg-slate-50";
     const toggleWeekday = (i: number, n: number) => {
         const w = lines[i].weekdays;
         setRecurring(i, { weekdays: w.includes(n) ? w.filter((x) => x !== n) : [...w, n] });
@@ -303,20 +300,6 @@ export default function QuoteForm({
                                                 <div>
                                                     <label className="text-xs text-slate-500">Desde → Hasta</label>
                                                     <div><DateRangeField mode="recurrente" start={l.from} end={l.to} onChange={(s, e) => setRecurring(i, { from: s, to: e })} /></div>
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Atajos por mes">
-                                                    <span className="text-xs text-slate-500 mr-1">Mes:</span>
-                                                    {monthButtons.map((m) => (
-                                                        <button key={m.label} type="button" onClick={() => setRecurring(i, { from: m.from, to: m.to })} className={chip}>{m.label}</button>
-                                                    ))}
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Extender hasta">
-                                                    <span className="text-xs text-slate-500 mr-1">Extender hasta:</span>
-                                                    {extendTargets(l.from).length === 0
-                                                        ? <span className="text-xs text-slate-400">elige «Desde»</span>
-                                                        : extendTargets(l.from).map((t) => (
-                                                            <button key={t} type="button" onClick={() => setRecurring(i, { to: t })} className={chip}>{formatDateDMY(t)}</button>
-                                                        ))}
                                                 </div>
                                             </div>
                                         )}

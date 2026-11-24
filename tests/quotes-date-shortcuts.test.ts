@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-    daysInMonth, lastDayOfMonth, firstDayOfMonth, nextDay, monthShortcuts, extendTargets, endAfterFromChange, exitAfterEntryChange, todayIso, parseIso,
+    daysInMonth, lastDayOfMonth, firstDayOfMonth, nextDay, endAfterFromChange, exitAfterEntryChange, todayIso, parseIso,
 } from "../src/lib/quotes/dateShortcuts";
 
 test("último día del mes: febrero normal y bisiesto", () => {
@@ -31,25 +31,6 @@ test("primer día, día siguiente y validación", () => {
     assert.equal(nextDay("2026-11-23"), "2026-11-24");
     assert.equal(parseIso("2027-02-29"), null);
     assert.equal(parseIso("2027-13-01"), null);
-});
-
-test("6 meses desde el actual, cruzando de diciembre a enero", () => {
-    const m = monthShortcuts("2026-11-23", 6);
-    assert.deepEqual(m.map((x) => x.label), ["Nov 2026", "Dic 2026", "Ene 2027", "Feb 2027", "Mar 2027", "Abr 2027"]);
-    assert.deepEqual(m[0], { label: "Nov 2026", from: "2026-11-23", to: "2026-11-30" }); // el mes actual parte hoy
-    assert.deepEqual(m[1], { label: "Dic 2026", from: "2026-12-01", to: "2026-12-31" });
-    assert.deepEqual(m[2], { label: "Ene 2027", from: "2027-01-01", to: "2027-01-31" });
-    assert.deepEqual(m[3], { label: "Feb 2027", from: "2027-02-01", to: "2027-02-28" });
-    assert.equal(monthShortcuts("2027-12-10", 3).map((x) => x.label).join(","), "Dic 2027,Ene 2028,Feb 2028");
-    assert.equal(monthShortcuts("2027-12-10", 3)[2].to, "2028-02-29");
-    assert.equal(monthShortcuts("", 6).length, 0);
-});
-
-test("«Extender hasta»: fin del mes de Desde y de los dos siguientes", () => {
-    assert.deepEqual(extendTargets("2027-01-01"), ["2027-01-31", "2027-02-28", "2027-03-31"]);
-    assert.deepEqual(extendTargets("2026-12-15"), ["2026-12-31", "2027-01-31", "2027-02-28"]);
-    assert.deepEqual(extendTargets("2027-12-15"), ["2027-12-31", "2028-01-31", "2028-02-29"]);
-    assert.deepEqual(extendTargets(""), []);
 });
 
 test("ajuste de «Hasta» al cambiar «Desde» (Recurrente) y de «Salida» al cambiar «Entrada» (Rango)", () => {

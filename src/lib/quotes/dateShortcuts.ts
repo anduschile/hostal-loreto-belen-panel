@@ -2,8 +2,6 @@
 // Todo se calcula con números (año, mes, día) y el texto AAAA-MM-DD se arma a mano:
 // no se usa Date con strings ni toISOString, así ninguna fecha se corre de día por la zona horaria.
 
-const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-
 const pad = (n: number, w = 2) => String(n).padStart(w, "0");
 
 export function isLeapYear(y: number): boolean {
@@ -61,28 +59,6 @@ export function nextDay(iso?: string | null): string {
 /** Fecha de hoy del navegador como AAAA-MM-DD (con la fecha local, sin pasar por UTC). */
 export function todayIso(now: Date = new Date()): string {
     return makeIso(now.getFullYear(), now.getMonth() + 1, now.getDate());
-}
-
-export type MonthShortcut = { label: string; from: string; to: string };
-
-/** Los próximos `count` meses desde el de `today` (el primero parte hoy; los demás, el día 1). */
-export function monthShortcuts(today: string, count = 6): MonthShortcut[] {
-    const p = parseIso(today);
-    if (!p) return [];
-    return Array.from({ length: count }, (_, k) => {
-        const t = addMonths(p.y, p.m, k);
-        return {
-            label: `${MONTHS_SHORT[t.m - 1]} ${t.y}`,
-            from: k === 0 ? today : makeIso(t.y, t.m, 1),
-            to: makeIso(t.y, t.m, daysInMonth(t.y, t.m)),
-        };
-    });
-}
-
-/** «Extender hasta»: fin del mes de Desde, del mes siguiente y del subsiguiente. [] si Desde no es válida. */
-export function extendTargets(from?: string | null): string[] {
-    if (!parseIso(from)) return [];
-    return [0, 1, 2].map((k) => lastDayOfMonth(from, k));
 }
 
 /** Al cambiar «Desde» (modo Recurrente): si «Hasta» falta o quedó antes, pasa al último día del mes de Desde. */
