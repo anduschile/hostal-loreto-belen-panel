@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createServiceClient } from "@/lib/supabase/server";
 
-// Protege TODO el sitio excepto /login y archivos estáticos/públicos.
+// Protege TODO el sitio excepto /login, el prefijo /api/public (API pública; ver lib/public-api) y archivos estáticos/públicos.
 // 1) Refresca la sesión (cookies) con el patrón oficial de @supabase/ssr.
 // 2) Exige sesión válida y fila activa en hostal_users (service_role).
 //    - Sin sesión: /api -> 401 JSON; páginas -> redirige a /login.
@@ -77,6 +77,6 @@ export async function middleware(request: NextRequest) {
 // Todo excepto /login, _next/static, _next/image, favicon y archivos públicos con extensión.
 export const config = {
     matcher: [
-        "/((?!login(?:/|$)|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff|woff2|ttf|otf|eot|css|js|map|txt|webmanifest)$).*)",
+        "/((?!login(?:/|$)|api/public(?:/|$)|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff|woff2|ttf|otf|eot|css|js|map|txt|webmanifest)$).*)",
     ],
 };
