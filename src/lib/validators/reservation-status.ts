@@ -9,4 +9,6 @@ export const reservationStatusSchema = z.object({
         "cancelled",
         "blocked",
     ]),
+    // Solo lo respeta el servidor si el usuario autenticado es superadmin.
+    allow_overlap: z.boolean().optional(),
 });
