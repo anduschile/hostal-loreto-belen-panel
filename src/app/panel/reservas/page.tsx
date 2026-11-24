@@ -1,6 +1,7 @@
 import { getReservations } from "@/lib/data/reservations";
 import { getRooms } from "@/lib/data/rooms";
 import { getGuests } from "@/lib/data/guests";
+import { isIsoDay } from "@/lib/reservations/range";
 import ReservasList from "./ReservasList";
 
 export const dynamic = "force-dynamic";
@@ -9,11 +10,24 @@ function getTodayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default async function ReservasPage() {
+type SearchParams = Promise<{ from?: string | string[]; to?: string | string[] }>;
+
+const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+export default async function ReservasPage({ searchParams }: { searchParams: SearchParams }) {
   const today = getTodayISO();
 
-  // Traemos TODAS las reservas y el filtro se hace en el cliente.
-  const allReservations = await getReservations().catch((err) => {
+  // Rango activo: el de la URL (?from=&to=) o, por defecto, hoy..hoy. Se filtra en el servidor.
+  const sp = await searchParams;
+  let from = first(sp.from);
+  let to = first(sp.to);
+  if (!isIsoDay(from) || !isIsoDay(to)) {
+    from = today;
+    to = today;
+  }
+  if (from > to) [from, to] = [to, from];
+
+  const allReservations = await getReservations({ range: { from, to } }).catch((err) => {
     console.error("[ReservasPage] Error al cargar reservas:", err);
     return [];
   });
@@ -28,6 +42,8 @@ export default async function ReservasPage() {
       <ReservasList
         initialReservations={allReservations ?? []}
         today={today}
+        from={from}
+        to={to}
         rooms={rooms ?? []}
         guests={guests ?? []}
       />
