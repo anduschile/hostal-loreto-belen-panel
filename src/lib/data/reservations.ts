@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/fetchAll";
+import { checkoutIsStrict } from "@/lib/reservations/range";
 
 const TABLE_NAME = "hostal_reservations";
 
@@ -156,9 +157,13 @@ export async function getReservations(filters: ReservationFilters = {}) {
       query = query.lte("check_in", toDate);
     }
 
-    // 🔹 Filtro de estadía: se cruza con [from, to]
+    // 🔹 Filtro de estadía (misma regla que lib/reservations/range.ts):
+    //    varios días => check_in <= to && check_out > from; un solo día => check_out >= from.
     if (range) {
-      query = query.lte("check_in", range.to).gte("check_out", range.from);
+      query = query.lte("check_in", range.to);
+      query = checkoutIsStrict(range.from, range.to)
+        ? query.gt("check_out", range.from)
+        : query.gte("check_out", range.from);
     }
 
     if (status && status !== "all") {
