@@ -8,7 +8,7 @@ export const ROOM_TYPES = ["matrimonial", "doble", "triple", "cuadruple"] as con
 export type PublicRoomType = (typeof ROOM_TYPES)[number];
 
 /** Horas que se mantiene una solicitud provisoria (p_hold_hours). */
-export const HOLD_HOURS = 24;
+export const HOLD_HOURS = 48;
 
 /** Colapsa espacios (incluye saltos de línea y tabulaciones) y recorta los extremos. */
 export function normalizeSpaces(value: string): string {
