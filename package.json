@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --experimental-test-module-mocks --test tests/quotes.test.ts tests/quotes-dates.test.ts tests/quotes-security.test.ts"
+    "test": "node --import tsx --experimental-test-module-mocks --test tests/quotes.test.ts tests/quotes-dates.test.ts tests/quotes-passengers.test.ts tests/quotes-security.test.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.1",

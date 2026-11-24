@@ -2,6 +2,9 @@
 // para poder probarlo sin base de datos ni correos reales.
 import {
     addDays,
+    normalizePassengers,
+    passengersError,
+    passengersText,
     calculateQuote,
     normalizeDiscountType,
     COMPANY_DISCOUNT_LABEL,
@@ -41,7 +44,7 @@ export type QuoteRow = {
     check_in: string;
     check_out: string;
     /** `dates`: una fecha ISO por noche. Las cotizaciones antiguas no la tienen (usan el rango check_in/check_out). */
-    lines: { occupancy: Occupancy; rooms: number; nights: number; dates?: string[]; rate_override: number | null }[];
+    lines: { occupancy: Occupancy; rooms: number; nights: number; dates?: string[]; rate_override: number | null; passengers?: string[] }[];
     discount_type: DiscountType;
     discount_value: number;
     discount_label: string | null;
@@ -67,7 +70,7 @@ export type QuoteInput = {
     check_in: string;
     check_out: string;
     /** `dates` opcional: si falta, la línea usa el rango entrada-salida de la cotización. */
-    lines: { occupancy: Occupancy; rooms: number; dates?: string[]; rate_override?: number | null }[];
+    lines: { occupancy: Occupancy; rooms: number; dates?: string[]; rate_override?: number | null; passengers?: unknown }[];
     /** «ninguno» | «empresa» | «manual». Si falta: «empresa» si la empresa tiene descuento; si no, «ninguno». */
     discount_mode?: DiscountMode;
     /** Solo modo manual */
@@ -97,6 +100,8 @@ export type SendEmailParams = {
     lineSummaries?: string[];
     /** Línea de estadía: «Entrada · Salida · N noches» o «Primera noche · Última noche (salida …)». */
     stay?: string;
+    /** Pasajeros por línea de habitaciones (mismo orden que lineSummaries); «» si no hay. Texto libre: el correo lo escapa. */
+    linePassengers?: string[];
 };
 
 const moneyCl = (n: number) => "$" + n.toLocaleString("es-CL");
@@ -127,6 +132,8 @@ export function validateQuoteInput(input: QuoteInput): string | null {
         } else if (!rangeOk) {
             return "El rango de fechas no es válido.";
         }
+        const pe = passengersError(normalizePassengers(l.passengers));
+        if (pe) return pe;
     }
     return null;
 }
@@ -191,12 +198,14 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
     // las ordena y cuenta él mismo; cualquier «nights» que mande el navegador se ignora.
     const rawLines = input.lines.map((l) => {
         const dates = effectiveDates({ dates: l.dates }, input.check_in, input.check_out);
+        const passengers = normalizePassengers(l.passengers);
         return {
             occupancy: l.occupancy,
             rooms: Number(l.rooms),
             nights: dates.length,
             dates,
             rate_override: Number(l.rate_override) > 0 ? Number(l.rate_override) : null,
+            ...(passengers.length ? { passengers } : {}),
         };
     });
     // check_in = fecha mínima; check_out = fecha máxima + 1 día (la tabla exige check_out > check_in)
@@ -287,6 +296,7 @@ export async function sendQuote(deps: QuoteDeps, id: number, opts: { toEmail?: s
         code,
         pdfBuffer,
         lineSummaries: describeLines(quote, calc),
+        linePassengers: quote.lines.map((l) => passengersText(l.passengers)),
         stay: stayText(quote.lines, quote.check_in, quote.check_out).text,
     });
 
