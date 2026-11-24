@@ -1,7 +1,7 @@
 // src/app/(panel)/habitaciones/page.tsx
 
 import type { Metadata } from "next";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Habitaciones | Panel Hostal",
@@ -20,7 +20,7 @@ type Habitacion = {
 };
 
 async function getRooms(): Promise<Habitacion[]> {
-  const { data, error } = await supabase
+  const { data, error } = await createClient()
     .from("hostal_rooms")
     .select("*")
     .order("code", { ascending: true });
