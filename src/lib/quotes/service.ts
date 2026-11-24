@@ -3,6 +3,7 @@
 import {
     addDays,
     calculateQuote,
+    withTableIva,
     normalizeDiscountType,
     COMPANY_DISCOUNT_LABEL,
     MANUAL_DISCOUNT_LABEL,
@@ -41,7 +42,7 @@ export type QuoteRow = {
     check_in: string;
     check_out: string;
     /** `dates`: una fecha ISO por noche. Las cotizaciones antiguas no la tienen (usan el rango check_in/check_out). */
-    lines: { occupancy: Occupancy; rooms: number; nights: number; dates?: string[]; rate_override: number | null }[];
+    lines: { occupancy: Occupancy; rooms: number; nights: number; dates?: string[]; rate_override: number | null; rate_with_iva?: number }[];
     discount_type: DiscountType;
     discount_value: number;
     discount_label: string | null;
@@ -67,7 +68,7 @@ export type QuoteInput = {
     check_in: string;
     check_out: string;
     /** `dates` opcional: si falta, la línea usa el rango entrada-salida de la cotización. */
-    lines: { occupancy: Occupancy; rooms: number; dates?: string[]; rate_override?: number | null }[];
+    lines: { occupancy: Occupancy; rooms: number; dates?: string[]; rate_override?: number | null; rate_with_iva?: number | null }[];
     /** «ninguno» | «empresa» | «manual». Si falta: «empresa» si la empresa tiene descuento; si no, «ninguno». */
     discount_mode?: DiscountMode;
     /** Solo modo manual */
@@ -189,16 +190,19 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
 
     // Noches por línea: las propias (`dates`) o, si faltan, las del rango entrada-salida. El servidor
     // las ordena y cuenta él mismo; cualquier «nights» que mande el navegador se ignora.
-    const rawLines = input.lines.map((l) => {
+    // Tarifa: con IVA ingresada (rate_with_iva, exacta) > neta escrita a mano (rate_override) > tabla (se lee como con IVA).
+    const rawLines = withTableIva(input.lines.map((l) => {
         const dates = effectiveDates({ dates: l.dates }, input.check_in, input.check_out);
+        const withIva = Math.round(Number(l.rate_with_iva));
         return {
             occupancy: l.occupancy,
             rooms: Number(l.rooms),
             nights: dates.length,
             dates,
-            rate_override: Number(l.rate_override) > 0 ? Number(l.rate_override) : null,
+            rate_override: withIva > 0 ? null : Number(l.rate_override) > 0 ? Number(l.rate_override) : null,
+            ...(withIva > 0 ? { rate_with_iva: withIva } : {}),
         };
-    });
+    }), rates);
     // check_in = fecha mínima; check_out = fecha máxima + 1 día (la tabla exige check_out > check_in)
     const period = periodFromDates(rawLines.flatMap((l) => l.dates))!;
     // 1) bruto sin descuento (sirve para validar el monto fijo)

@@ -27,13 +27,20 @@ export type QuoteLineInput = {
     dates?: string[] | null;
     /** Tarifa escrita a mano. Si es > 0 pisa la de la tabla. */
     rate_override?: number | null;
+    /**
+     * Tarifa CON IVA por noche, tal como la ingresó el usuario (entero). Si viene, el total con IVA de la línea es
+     * exactamente rate_with_iva × habitaciones × noches y el neto se deriva de ahí (sin redondear la tarifa neta).
+     * Opcional: las cotizaciones antiguas no la tienen y se calculan igual que siempre.
+     */
+    rate_with_iva?: number | null;
 };
 
 export type QuoteLineResult = {
     occupancy: Occupancy;
     rooms: number;
     nights: number;
-    rate: number; // tarifa neta/noche efectivamente usada
+    rate: number; // tarifa neta/noche efectivamente usada (línea «con IVA»: neto redondeado, solo informativo)
+    rate_with_iva?: number; // solo si la línea se ingresó con IVA
     rate_missing: boolean; // true si la tarifa efectiva es 0 («tarifa sin cargar»)
     subtotal: number; // rate * rooms * nights
 };
@@ -112,7 +119,74 @@ export function calculateDiscount(gross: number, rawType?: unknown, value?: numb
     return Math.min(Math.round(v), gross); // monto_fijo: nunca más que el bruto
 }
 
+/**
+ * Valor «con IVA» entero que corresponde a una tarifa neta guardada como entero (la tabla de tarifas guarda
+ * round(valor/1.19)). Entre los enteros que dan ese neto se elige el más «redondo» (múltiplo de la mayor potencia de 10)
+ * y, a igualdad, el más cercano a neto×1,19. Ej.: 50420 -> 60000.
+ */
+export function ivaRateFromNet(net: number): number {
+    const n = Math.round(num(net));
+    if (n <= 0) return 0;
+    const exact = n * (1 + IVA_RATE);
+    const cands: number[] = [];
+    for (let v = Math.floor(exact) - 2; v <= Math.ceil(exact) + 2; v++) if (Math.round(v / (1 + IVA_RATE)) === n) cands.push(v);
+    if (!cands.length) return Math.round(exact);
+    const roundness = (v: number) => { let p = 1; while (p < 1e6 && v % (p * 10) === 0) p *= 10; return p; };
+    cands.sort((a, b) => roundness(b) - roundness(a) || Math.abs(a - exact) - Math.abs(b - exact));
+    return cands[0];
+}
+
+/**
+ * Líneas sin tarifa propia usan la tabla de tarifas: se interpretan como valores CON IVA (así se cargan por defecto)
+ * y se pasan a rate_with_iva. Las que ya traen tarifa (neta o con IVA) quedan como están.
+ */
+export function withTableIva<T extends { occupancy: Occupancy; rate_override?: number | null; rate_with_iva?: number | null }>(lines: T[], rates: RateTable): T[] {
+    return lines.map((l) => {
+        if (num(l.rate_with_iva) > 0 || num(l.rate_override) > 0) return l;
+        const v = ivaRateFromNet(rates[l.occupancy]);
+        return v > 0 ? { ...l, rate_with_iva: v } : l;
+    });
+}
+
+/**
+ * Cálculo con tarifas CON IVA: el total con IVA sale del valor ingresado (exacto) y neto e IVA se derivan de él.
+ * Los subtotales por línea (netos enteros) suman exactamente el bruto (reparto por mayor resto).
+ */
+function calculateQuoteWithIva(input: QuoteCalcInput): QuoteCalcResult {
+    const k = 1 + IVA_RATE;
+    const base = input.lines.map((l) => {
+        const rooms = Math.floor(num(l.rooms));
+        const nights = Array.isArray(l.dates) && l.dates.length > 0 ? l.dates.length : Math.floor(num(l.nights));
+        const gv = Math.round(num(l.rate_with_iva));
+        const iva = gv > 0;
+        const rate = iva ? Math.round(gv / k) : resolveRate(input.rates, l.occupancy, l.rate_override);
+        const exact = iva ? (gv * rooms * nights) / k : rate * rooms * nights;
+        return { l, rooms, nights, rate, iva, gv, exact };
+    });
+    const grossExact = base.reduce((s, b) => s + b.exact, 0);
+    const gross = Math.round(grossExact);
+    const floors = base.map((b) => Math.floor(b.exact + 1e-9));
+    let left = gross - floors.reduce((s, f) => s + f, 0);
+    const order = base.map((b, i) => ({ i, frac: b.exact - floors[i] })).sort((a, b) => b.frac - a.frac);
+    for (const o of order) { if (left <= 0) break; floors[o.i] += 1; left -= 1; }
+    const lines: QuoteLineResult[] = base.map((b, i) => ({
+        occupancy: b.l.occupancy, rooms: b.rooms, nights: b.nights, rate: b.rate, rate_missing: b.rate === 0,
+        subtotal: floors[i], ...(b.iva ? { rate_with_iva: b.gv } : {}),
+    }));
+    const type = normalizeDiscountType(input.discount_type);
+    const dv = num(input.discount_value);
+    let discount = 0, discountExact = 0;
+    if (type !== "ninguno" && dv > 0 && gross > 0) {
+        if (type === "porcentaje") { discountExact = (grossExact * Math.min(dv, 100)) / 100; discount = Math.min(Math.round(discountExact), gross); }
+        else { discount = Math.min(Math.round(dv), gross); discountExact = discount; }
+    }
+    const net = gross - discount;
+    const total = Math.round((grossExact - discountExact) * k);
+    return { lines, gross, discount, net, iva: total - net, total, has_missing_rates: lines.some((l) => l.rate_missing) };
+}
+
 export function calculateQuote(input: QuoteCalcInput): QuoteCalcResult {
+    if (input.lines.some((l) => num(l.rate_with_iva) > 0)) return calculateQuoteWithIva(input);
     const lines: QuoteLineResult[] = input.lines.map((l) => {
         const rooms = Math.floor(num(l.rooms));
         const nights = Array.isArray(l.dates) && l.dates.length > 0 ? l.dates.length : Math.floor(num(l.nights));
