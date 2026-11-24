@@ -5,7 +5,7 @@ import { Trash2, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import DateRangeField from "@/components/quotes/DateRangeField";
 import {
-    COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, MAX_NIGHTS_PER_LINE, OCCUPANCIES, OCCUPANCY_LABELS, addDays, calculateQuote, discountLabel, formatDateDMY,
+    COMPANY_DISCOUNT_LABEL, MANUAL_DISCOUNT_LABEL, MAX_NIGHTS_PER_LINE, OCCUPANCIES, OCCUPANCY_LABELS, addDays, calculateQuote, discountLabel, formatDateDMY, ivaRateFromNet, withTableIva,
     describeDates, effectiveDates, normalizePassengers, passengersError, normalizeDiscountType, periodFromDates, rangeDates, recurringDates, validateDates, weekdayOf,
     type DiscountMode, type DiscountType, type Occupancy, type RateTable,
 } from "@/lib/quotes/calc";
@@ -22,7 +22,8 @@ export type FormSettings = { validity_days: number; validity_provisional: boolea
  * «Rango» y «Recurrente» solo la regeneran cuando el usuario los cambia (así editar no altera fechas guardadas).
  */
 type FormLine = {
-    occupancy: Occupancy; rooms: string; rate: string; // rate "" -> usa la tabla
+    occupancy: Occupancy; rooms: string; rate: string; // rate "" -> usa la tabla (se lee como valor con IVA)
+    rateMode: "neto" | "con_iva";                      // cómo se interpreta `rate` cuando se escribe a mano
     mode: "rango" | "recurrente";
     rStart: string; rEnd: string;                      // modo Rango: entrada y salida de la línea
     weekdays: number[]; from: string; to: string;      // modo Recurrente (0 = domingo)
@@ -36,7 +37,7 @@ const WEEKDAY_BUTTONS: { n: number; label: string; title: string }[] = [
 ];
 
 const blankLine = (rangeStart = "", rangeEnd = ""): FormLine => ({
-    occupancy: "doble", rooms: "1", rate: "", mode: "rango", rStart: rangeStart, rEnd: rangeEnd,
+    occupancy: "doble", rooms: "1", rate: "", rateMode: "neto", mode: "rango", rStart: rangeStart, rEnd: rangeEnd,
     weekdays: [], from: "", to: "", dates: rangeDates(rangeStart, rangeEnd), passengers: "",
 });
 
@@ -46,7 +47,8 @@ function lineFromRow(l: QuoteRow["lines"][number], q: QuoteRow): FormLine {
     const first = dates[0] ?? "", last = dates[dates.length - 1] ?? "";
     const contiguous = dates.length > 0 && dates.length === rangeDates(first, addDays(last, 1)).length;
     return {
-        occupancy: l.occupancy, rooms: String(l.rooms), rate: l.rate_override ? String(l.rate_override) : "",
+        occupancy: l.occupancy, rooms: String(l.rooms), rate: l.rate_with_iva ? String(l.rate_with_iva) : l.rate_override ? String(l.rate_override) : "",
+        rateMode: l.rate_with_iva ? "con_iva" : "neto",
         mode: contiguous || dates.length === 0 ? "rango" : "recurrente",
         rStart: first, rEnd: first ? addDays(last, 1) : "",
         weekdays: Array.from(new Set(dates.map(weekdayOf))), from: first, to: last, dates,
@@ -131,7 +133,8 @@ export default function QuoteForm({
     const effMode: DiscountMode = discMode === "empresa" && !companyHasDiscount ? "ninguno" : discMode;
     const eff = effectiveDiscount(effMode, company, manType, manValue, manReason);
 
-    const rawLines = lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), nights: l.dates.length, dates: l.dates, rate_override: l.rate === "" ? null : Number(l.rate) }));
+    const rateFields = (l: FormLine) => (l.rate === "" ? { rate_override: null } : l.rateMode === "con_iva" ? { rate_override: null, rate_with_iva: Number(l.rate) } : { rate_override: Number(l.rate) });
+    const rawLines = withTableIva(lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), nights: l.dates.length, dates: l.dates, ...rateFields(l) })), rates);
     const gross = useMemo(() => calculateQuote({ lines: rawLines, rates }).gross, [lines, rates]); // eslint-disable-line react-hooks/exhaustive-deps
     const discountError = effMode === "manual" ? manualDiscountError(manType, manValue, gross) : null;
 
@@ -191,7 +194,7 @@ export default function QuoteForm({
                     company_id: company?.id ?? null, company_name: companyName, company_rut: rut, contact_name: contact, contact_email: email,
                     ...(periodFromDates(lines.flatMap((l) => l.dates)) ?? { check_in: "", check_out: "" }), validity_days: Number(validity), conditions,
                     discount_mode: effMode, discount_type: manType, discount_value: Number(manValue) || 0, discount_reason: manReason,
-                    lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), dates: l.dates, rate_override: l.rate === "" ? null : Number(l.rate), passengers: l.passengers.split("\n") })),
+                    lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), dates: l.dates, ...rateFields(l), passengers: l.passengers.split("\n") })),
                 }),
             });
             const json = await res.json();
@@ -269,8 +272,11 @@ export default function QuoteForm({
                                                 {OCCUPANCIES.map((o) => <option key={o} value={o}>{OCCUPANCY_LABELS[o]}</option>)}
                                             </select></div>
                                         <div className="col-span-3"><label className="text-xs text-slate-500">Habitaciones</label><input type="number" min={1} value={l.rooms} onChange={(e) => setLine(i, { rooms: e.target.value })} className={input} /></div>
-                                        <div className="col-span-3"><label className="text-xs text-slate-500">Neto / noche</label>
-                                            <input type="number" min={0} value={l.rate === "" ? (rates[l.occupancy] || "") : l.rate} placeholder="0"
+                                        <div className="col-span-3"><label className="text-xs text-slate-500">Tarifa / noche
+                                                <select value={l.rateMode} onChange={(e) => setLine(i, { rateMode: e.target.value as "neto" | "con_iva" })} className="ml-1 text-xs border border-slate-300 rounded px-1">
+                                                    <option value="neto">neto</option><option value="con_iva">con IVA</option>
+                                                </select></label>
+                                            <input type="number" min={0} value={l.rate === "" ? (l.rateMode === "con_iva" ? ivaRateFromNet(rates[l.occupancy]) : rates[l.occupancy]) || "" : l.rate} placeholder="0"
                                                 onChange={(e) => setLine(i, { rate: e.target.value })} className={input} /></div>
                                         <button type="button" disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, k) => k !== i))} className="col-span-2 pb-2 text-slate-400 hover:text-red-500 disabled:opacity-30 justify-self-end" title="Quitar línea"><Trash2 size={16} /></button>
                                     </div>
