@@ -2,6 +2,9 @@
 // para poder probarlo sin base de datos ni correos reales.
 import {
     addDays,
+    normalizePassengers,
+    passengersError,
+    passengersText,
     calculateQuote,
     withTableIva,
     normalizeDiscountType,
@@ -42,7 +45,7 @@ export type QuoteRow = {
     check_in: string;
     check_out: string;
     /** `dates`: una fecha ISO por noche. Las cotizaciones antiguas no la tienen (usan el rango check_in/check_out). */
-    lines: { occupancy: Occupancy; rooms: number; nights: number; dates?: string[]; rate_override: number | null; rate_with_iva?: number }[];
+    lines: { occupancy: Occupancy; rooms: number; nights: number; dates?: string[]; rate_override: number | null; rate_with_iva?: number; passengers?: string[] }[];
     discount_type: DiscountType;
     discount_value: number;
     discount_label: string | null;
@@ -68,7 +71,7 @@ export type QuoteInput = {
     check_in: string;
     check_out: string;
     /** `dates` opcional: si falta, la línea usa el rango entrada-salida de la cotización. */
-    lines: { occupancy: Occupancy; rooms: number; dates?: string[]; rate_override?: number | null; rate_with_iva?: number | null }[];
+    lines: { occupancy: Occupancy; rooms: number; dates?: string[]; rate_override?: number | null; rate_with_iva?: number | null; passengers?: unknown }[];
     /** «ninguno» | «empresa» | «manual». Si falta: «empresa» si la empresa tiene descuento; si no, «ninguno». */
     discount_mode?: DiscountMode;
     /** Solo modo manual */
@@ -98,6 +101,8 @@ export type SendEmailParams = {
     lineSummaries?: string[];
     /** Línea de estadía: «Entrada · Salida · N noches» o «Primera noche · Última noche (salida …)». */
     stay?: string;
+    /** Pasajeros por línea de habitaciones (mismo orden que lineSummaries); «» si no hay. Texto libre: el correo lo escapa. */
+    linePassengers?: string[];
 };
 
 const moneyCl = (n: number) => "$" + n.toLocaleString("es-CL");
@@ -128,6 +133,8 @@ export function validateQuoteInput(input: QuoteInput): string | null {
         } else if (!rangeOk) {
             return "El rango de fechas no es válido.";
         }
+        const pe = passengersError(normalizePassengers(l.passengers));
+        if (pe) return pe;
     }
     return null;
 }
@@ -193,6 +200,7 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
     // Tarifa: con IVA ingresada (rate_with_iva, exacta) > neta escrita a mano (rate_override) > tabla (se lee como con IVA).
     const rawLines = withTableIva(input.lines.map((l) => {
         const dates = effectiveDates({ dates: l.dates }, input.check_in, input.check_out);
+        const passengers = normalizePassengers(l.passengers);
         const withIva = Math.round(Number(l.rate_with_iva));
         return {
             occupancy: l.occupancy,
@@ -201,6 +209,7 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
             dates,
             rate_override: withIva > 0 ? null : Number(l.rate_override) > 0 ? Number(l.rate_override) : null,
             ...(withIva > 0 ? { rate_with_iva: withIva } : {}),
+            ...(passengers.length ? { passengers } : {}),
         };
     }), rates);
     // check_in = fecha mínima; check_out = fecha máxima + 1 día (la tabla exige check_out > check_in)
@@ -291,6 +300,7 @@ export async function sendQuote(deps: QuoteDeps, id: number, opts: { toEmail?: s
         code,
         pdfBuffer,
         lineSummaries: describeLines(quote, calc),
+        linePassengers: quote.lines.map((l) => passengersText(l.passengers)),
         stay: stayText(quote.lines, quote.check_in, quote.check_out).text,
     });
 

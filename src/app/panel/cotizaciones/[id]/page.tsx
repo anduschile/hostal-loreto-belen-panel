@@ -7,7 +7,7 @@ import { ArrowLeft, Download, Send, Pencil, Copy, Trash2, Loader2 } from "lucide
 import { toast } from "sonner";
 import { STATUS_STYLE } from "@/components/quotes/statusStyle";
 import {
-    OCCUPANCY_LABELS, calculateQuote, describeLine, discountLabel, emptyRates, formatQuoteCode, normalizeDiscountType, stayText, type RateTable,
+    OCCUPANCY_LABELS, calculateQuote, describeLine, discountLabel, emptyRates, formatQuoteCode, normalizeDiscountType, passengersText, stayText, type RateTable,
 } from "@/lib/quotes/calc";
 import type { QuoteRow } from "@/lib/quotes/service";
 
@@ -137,7 +137,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
                     <thead className="text-slate-500 text-left"><tr><th className="py-1">Ocupación</th><th>Hab.</th><th>Noches</th><th className="text-right">Neto/noche</th><th className="text-right">Subtotal neto</th></tr></thead>
                     <tbody>
                         {calc.lines.map((l, i) => (
-                            <Fragment key={i}><tr className="border-t border-slate-100"><td className="py-1.5">{OCCUPANCY_LABELS[l.occupancy]}</td><td>{l.rooms}</td><td>{l.nights}</td><td className="text-right">{money(l.rate)}</td><td className="text-right">{money(l.subtotal)}</td></tr><tr><td colSpan={5} className="pb-1.5 text-xs text-slate-500">{describeLine(quote.lines[i] ?? {}, quote.check_in, quote.check_out)}</td></tr></Fragment>
+                            <Fragment key={i}><tr className="border-t border-slate-100"><td className="py-1.5">{OCCUPANCY_LABELS[l.occupancy]}</td><td>{l.rooms}</td><td>{l.nights}</td><td className="text-right">{money(l.rate)}</td><td className="text-right">{money(l.subtotal)}</td></tr><tr><td colSpan={5} className="pb-1.5 text-xs text-slate-500">{describeLine(quote.lines[i] ?? {}, quote.check_in, quote.check_out)}{passengersText(quote.lines[i]?.passengers) && <div className="mt-0.5 text-slate-600 break-words">Pasajeros: {passengersText(quote.lines[i]?.passengers)}</div>}</td></tr></Fragment>
                         ))}
                     </tbody>
                 </table>

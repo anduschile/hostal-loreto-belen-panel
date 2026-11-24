@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 // Reutiliza los estilos del voucher para mantener la misma imagen.
 import { styles } from "./ReservationVoucher";
-import { describeLine, discountLabel, effectiveDates, stayText, PDF_SAFE_ARROW, formatQuoteCode, OCCUPANCY_LABELS, type QuoteCalcResult } from "../quotes/calc";
+import { describeLine, discountLabel, effectiveDates, stayText, PDF_SAFE_ARROW, passengersText, formatQuoteCode, OCCUPANCY_LABELS, type QuoteCalcResult } from "../quotes/calc";
 import type { QuoteRow } from "../quotes/service";
 
 const formatDate = (d?: string | null) => {
@@ -71,13 +71,18 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
                         <Text style={col.rate}>Neto/noche</Text><Text style={col.sub}>Subtotal neto</Text>
                     </View>
                     {calc.lines.map((l, i) => (
-                        <View key={i} wrap={false} style={{ marginBottom: 5 }}>
+                        <React.Fragment key={i}>
+                        <View wrap={false} style={{ marginBottom: passengersText(quote.lines[i]?.passengers) ? 1 : 5 }}>
                             <View style={{ flexDirection: "row" }}>
                                 <Text style={col.occ}>{OCCUPANCY_LABELS[l.occupancy]}</Text><Text style={col.qty}>{l.rooms}</Text><Text style={col.nights}>{l.nights}</Text>
                                 <Text style={col.rate}>{money(l.rate)}</Text><Text style={col.sub}>{money(l.subtotal)}</Text>
                             </View>
                             <Text style={{ fontSize: 8.5, color: "#666", marginTop: 1 }}>{describeLine(quote.lines[i] ?? {}, quote.check_in, quote.check_out, PDF_SAFE_ARROW)}</Text>
                         </View>
+                        {passengersText(quote.lines[i]?.passengers) ? (
+                            <Text style={{ fontSize: 8.5, color: "#444", marginBottom: 5, lineHeight: 1.3 }}>Pasajeros: {passengersText(quote.lines[i]?.passengers)}</Text>
+                        ) : null}
+                        </React.Fragment>
                     ))}
                 </View>
 

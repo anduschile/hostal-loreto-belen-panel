@@ -134,3 +134,31 @@ test("withTableIva no toca líneas con tarifa propia", () => {
     assert.equal(out[1].rate_with_iva, 70000);
     assert.equal(out[2].rate_with_iva, 60000);
 });
+
+// ---- Casos con la tarifa neta de la tabla 50.420 (= 60.000 con IVA) y descuento porcentual ----
+const nights = (n: number) => rangeDates("2026-12-01", `2026-12-${String(1 + n).padStart(2, "0")}`);
+
+async function totalFor(n: number, rooms: number, pct?: number) {
+    const q = await createQuote(deps(tableRates), {
+        ...base, ...(pct ? { discount_mode: "manual" as const, discount_type: "porcentaje" as const, discount_value: pct } : {}),
+        lines: [{ occupancy: "doble", rooms, dates: nights(n) }],
+    });
+    assert.equal(q.net + q.iva, q.total);
+    return q;
+}
+
+test("tabla 50.420: 17 noches, 1 habitación, sin descuento = $1.020.000", async () => {
+    assert.equal((await totalFor(17, 1)).total, 1020000);
+});
+
+test("tabla 50.420: 17 noches, 1 habitación, descuento 25% = $765.000 (no $764.997)", async () => {
+    assert.equal((await totalFor(17, 1, 25)).total, 765000);
+});
+
+test("tabla 50.420: 9 noches, 2 habitaciones, descuento 25% = $810.000", async () => {
+    assert.equal((await totalFor(9, 2, 25)).total, 810000);
+});
+
+test("tabla 50.420: 2 noches, 1 habitación, sin descuento = $120.000 (no cambia)", async () => {
+    assert.equal((await totalFor(2, 1)).total, 120000);
+});

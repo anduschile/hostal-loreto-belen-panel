@@ -10,14 +10,14 @@ export function isQuoteEmailLive() {
     return process.env.QUOTES_EMAIL_MODE === "live";
 }
 
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
-export function buildQuoteEmail({ toEmail, contactName, code, pdfBuffer, lineSummaries, stay }: SendEmailParams) {
+export function buildQuoteEmail({ toEmail, contactName, code, pdfBuffer, lineSummaries, linePassengers, stay }: SendEmailParams) {
     const stayHtml = stay
         ? `<tr><td style="padding:0 24px 8px 24px;color:#374151;font-size:14px;line-height:1.6;">${esc(stay)}</td></tr>`
         : "";
     const linesHtml = lineSummaries?.length
-        ? `<tr><td style="padding:0 24px 16px 24px;color:#374151;font-size:14px;line-height:1.6;"><strong>Detalle:</strong><ul style="margin:6px 0 0 18px;padding:0;">${lineSummaries.map((s) => `<li>${esc(s)}</li>`).join("")}</ul></td></tr>`
+        ? `<tr><td style="padding:0 24px 16px 24px;color:#374151;font-size:14px;line-height:1.6;"><strong>Detalle:</strong><ul style="margin:6px 0 0 18px;padding:0;">${lineSummaries.map((s, i) => `<li>${esc(s)}${linePassengers?.[i] ? `<br><span style="color:#6b7280;font-size:13px;">Pasajeros: ${esc(linePassengers[i])}</span>` : ""}</li>`).join("")}</ul></td></tr>`
         : "";
     return {
         from: QUOTE_FROM,

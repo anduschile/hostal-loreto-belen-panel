@@ -283,3 +283,14 @@ test("lista de cotizaciones: «4 dic → 30 dic», con año solo si no es el añ
     assert.equal(formatListDate("2027-01-02", now), "2 ene 2027");
     assert.equal(`${formatListDate("2026-12-04", now)} → ${formatListDate("2026-12-30", now)}`, "4 dic → 30 dic");
 });
+
+import { formatDateDMY } from "../src/lib/quotes/calc";
+
+test("formatDateDMY: AAAA-MM-DD -> DD/MM/AAAA sin correr el día", () => {
+    assert.equal(formatDateDMY("2026-11-29"), "29/11/2026");
+    assert.equal(formatDateDMY("2026-01-01"), "01/01/2026");
+    assert.equal(formatDateDMY("2026-12-31"), "31/12/2026");
+    assert.equal(formatDateDMY("2026-11-29T00:00:00+00:00"), "29/11/2026");
+    assert.equal(formatDateDMY(null), "");
+    assert.equal(formatDateDMY("sin fecha"), "sin fecha");
+});

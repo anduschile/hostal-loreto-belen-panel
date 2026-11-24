@@ -33,6 +33,8 @@ export type QuoteLineInput = {
      * Opcional: las cotizaciones antiguas no la tienen y se calculan igual que siempre.
      */
     rate_with_iva?: number | null;
+    /** Ocupantes por habitación (opcional): un string por habitación; si comparten, se separan con « / ». */
+    passengers?: string[] | null;
 };
 
 export type QuoteLineResult = {
@@ -446,6 +448,45 @@ export function stayText(lines: { dates?: string[] | null }[], checkIn?: string 
 export function formatListDate(iso: string, now: Date = new Date()): string {
     const p = parts(iso);
     return `${p.d} ${MONTHS_SHORT_ES[p.m]}${p.y !== now.getFullYear() ? ` ${p.y}` : ""}`;
+}
+
+/** Límites de pasajeros por línea. Superarlos se RECHAZA con un error (no se trunca en silencio). */
+export const MAX_PASSENGER_ENTRIES = 200;
+export const MAX_PASSENGER_CHARS = 160;
+
+/**
+ * Limpia la lista de pasajeros de una línea: ignora lo que no sea un arreglo; descarta los elementos que no
+ * sean texto; elimina caracteres de control; recorta espacios y descarta entradas vacías.
+ * No aplica límites (ver passengersError).
+ */
+export function normalizePassengers(v: unknown): string[] {
+    if (!Array.isArray(v)) return [];
+    const out: string[] = [];
+    for (const x of v) {
+        if (typeof x !== "string") continue;
+        // eslint-disable-next-line no-control-regex
+        const t = x.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
+        if (t) out.push(t);
+    }
+    return out;
+}
+
+/** Mensaje de error si la lista (ya normalizada) supera los límites; null si está bien. */
+export function passengersError(list: string[]): string | null {
+    if (list.length > MAX_PASSENGER_ENTRIES) return `Una línea admite como máximo ${MAX_PASSENGER_ENTRIES} entradas de pasajeros.`;
+    if (list.some((p) => p.length > MAX_PASSENGER_CHARS)) return `Cada entrada de pasajeros admite como máximo ${MAX_PASSENGER_CHARS} caracteres.`;
+    return null;
+}
+
+/** «1. A / B · 2. C · 3. D» (numerado por habitación). Vacío si no hay pasajeros. */
+export function passengersText(v: unknown): string {
+    return normalizePassengers(v).map((p, i) => `${i + 1}. ${p}`).join(" · ");
+}
+
+/** «2026-11-29» -> «29/11/2026». Trabaja sobre el texto (sin crear un Date), así la fecha no se corre de día. */
+export function formatDateDMY(iso?: string | null): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso ?? "");
 }
 
 export function formatQuoteCode(n: number): string {
