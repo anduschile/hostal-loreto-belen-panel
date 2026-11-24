@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 
 export type DashboardStats = {
     occupancyTodayPercent: number;
@@ -70,17 +71,25 @@ export async function getDashboardStats(today: string): Promise<DashboardStats> 
     const lastDay = new Date(year, month + 1, 0).getDate();
     const endOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
 
-    const { data: payments, error: paymentsError } = await supabase
-        .from("hostal_payments")
-        .select("amount")
-        .gte("payment_date", startOfMonth)
-        .lte("payment_date", endOfMonth);
-
-    if (paymentsError) {
+    let payments: { amount: number | null }[] = [];
+    try {
+        payments = await fetchAll<{ amount: number | null }>(
+            (from, to) =>
+                supabase
+                    .from("hostal_payments")
+                    .select("amount")
+                    .gte("payment_date", startOfMonth)
+                    .lte("payment_date", endOfMonth)
+                    .order("payment_date", { ascending: true })
+                    .order("id", { ascending: true })
+                    .range(from, to),
+            { label: "dashboard:monthlyIncome" }
+        );
+    } catch (paymentsError) {
         console.error("Error fetching payments:", paymentsError);
     }
 
-    const monthlyIncome = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) ?? 0;
+    const monthlyIncome = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     return {
         occupancyTodayPercent,

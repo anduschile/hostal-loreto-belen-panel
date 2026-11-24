@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export async function GET(req: Request) {
         }
 
         const supabase = createClient();
-        const { data, error } = await supabase
+        const data = await fetchAll<any>((rFrom, rTo) => supabase
             .from("hostal_reservations")
             .select(`
                 id, check_in, check_out, status, notes, source,
@@ -25,11 +26,11 @@ export async function GET(req: Request) {
             `)
             .gte("check_in", from)
             .lte("check_in", to)
-            .order("check_in", { ascending: false });
+            .order("check_in", { ascending: false })
+            .order("id", { ascending: false })
+            .range(rFrom, rTo), { label: "guests-log" });
 
-        if (error) throw error;
-
-        return NextResponse.json(data ?? []);
+        return NextResponse.json(data);
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

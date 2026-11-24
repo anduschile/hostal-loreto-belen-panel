@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 
 type CompanyJoin = { name: string } | { name: string }[] | null;
 
@@ -76,18 +77,25 @@ export async function getDashboardStats(
 
     // --- 1. FINANCIAL DATA (hostal_payments) ---
     // Inclusive: >= fromDate 00:00 AND < nextDay 00:00
-    const { data: payments, error: payError } = await supabase
-        .from("hostal_payments")
-        .select("amount, payment_date, method, document_type")
-        .gte("payment_date", fromDate)
-        .lt("payment_date", nextDay);
-
-    if (payError) {
+    // Paginado: un rango largo puede superar el tope de 1.000 filas por consulta.
+    let cleanPayments: any[];
+    try {
+        cleanPayments = await fetchAll<any>(
+            (from, to) =>
+                supabase
+                    .from("hostal_payments")
+                    .select("amount, payment_date, method, document_type")
+                    .gte("payment_date", fromDate)
+                    .lt("payment_date", nextDay)
+                    .order("payment_date", { ascending: true })
+                    .order("id", { ascending: true })
+                    .range(from, to),
+            { label: "stats:payments" }
+        );
+    } catch (payError: any) {
         console.error("Error fetching payments stats:", payError);
         throw new Error(payError.message);
     }
-
-    const cleanPayments = payments || [];
     const total_income = cleanPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
     const transaction_count = cleanPayments.length;
 
@@ -139,22 +147,29 @@ export async function getDashboardStats(
     // Reservation candidates:
     // Started before end of window (check_in < nextDay)
     // AND Ended after start of window (check_out > fromDate)
-    const { data: reservations, error: resError } = await supabase
-        .from("hostal_reservations")
-        .select(`
+    let cleanReservations: any[];
+    try {
+        cleanReservations = await fetchAll<any>(
+            (from, to) =>
+                supabase
+                    .from("hostal_reservations")
+                    .select(`
             id, check_in, check_out, room_id, status, total_price, 
             company_id, billing_type, company_name_snapshot,
             hostal_companies (id, name)
         `)
-        .neq("status", "cancelled")
-        .lt("check_in", nextDay)
-        .gt("check_out", fromDate);
-
-    if (resError) {
+                    .neq("status", "cancelled")
+                    .lt("check_in", nextDay)
+                    .gt("check_out", fromDate)
+                    .order("check_in", { ascending: true })
+                    .order("id", { ascending: true })
+                    .range(from, to),
+            { label: "stats:occupancy" }
+        );
+    } catch (resError: any) {
         console.error("Error fetching occupancy stats:", resError);
         throw new Error(resError.message);
     }
-    const cleanReservations = reservations || [];
 
     // Daily occupancy
     let sumOccupancyRate = 0;
@@ -241,18 +256,22 @@ export async function getDetailedStats(params: StatsParams): Promise<DetailedSta
 
     // --- Companies (All) ---
     // Same overlap logic as dashboard but fetch all (no slice later)
-    const { data: reservations, error: resError } = await supabase
-        .from("hostal_reservations")
-        .select(`
+    const cleanReservations = await fetchAll<any>(
+        (from, to) =>
+            supabase
+                .from("hostal_reservations")
+                .select(`
             id, total_price, company_id, billing_type, company_name_snapshot,
             hostal_companies (id, name)
         `)
-        .neq("status", "cancelled")
-        .lt("check_in", nextDay)
-        .gt("check_out", fromDate);
-
-    if (resError) throw new Error(resError.message);
-    const cleanReservations = reservations || [];
+                .neq("status", "cancelled")
+                .lt("check_in", nextDay)
+                .gt("check_out", fromDate)
+                .order("check_in", { ascending: true })
+                .order("id", { ascending: true })
+                .range(from, to),
+        { label: "stats:companies" }
+    );
 
     const companyMap = new Map<number, { name: string; revenue: number; count: number }>();
     cleanReservations.forEach(r => {
@@ -310,13 +329,18 @@ export async function getDetailedStats(params: StatsParams): Promise<DetailedSta
     }
 
     // Occupied Capacity
-    const { data: occResData } = await supabase.from("hostal_reservations")
-        .select(`id, check_in, check_out, room_id`)
-        .neq("status", "cancelled")
-        .lt("check_in", nextDay)
-        .gt("check_out", fromDate);
-
-    const occReservations = occResData || [];
+    const occReservations = await fetchAll<any>(
+        (from, to) =>
+            supabase.from("hostal_reservations")
+                .select(`id, check_in, check_out, room_id`)
+                .neq("status", "cancelled")
+                .lt("check_in", nextDay)
+                .gt("check_out", fromDate)
+                .order("check_in", { ascending: true })
+                .order("id", { ascending: true })
+                .range(from, to),
+        { label: "stats:occupancy-by-type" }
+    );
     const roomTypeMap = new Map<number, string>();
     allRooms.forEach(r => roomTypeMap.set(r.id, r.room_type));
 
