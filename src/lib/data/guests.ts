@@ -1,20 +1,29 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/fetchAll";
 import { Guest, GuestInsert } from "@/types/hostal";
 
 const TABLE_NAME = "hostal_guests";
 
 export async function getGuests(params: { search?: string } = {}) {
   const supabase = createClient();
-  let query = supabase.from(TABLE_NAME).select("*").order("full_name", { ascending: true });
 
-  if (params.search) {
-    // Search by name, document or email
-    query = query.or(`full_name.ilike.%${params.search}%,document_id.ilike.%${params.search}%,email.ilike.%${params.search}%`);
-  }
+  // Se pagina para no quedar truncado en 1.000 filas; id desempata para que el orden sea determinista.
+  const buildQuery = () => {
+    let query = supabase
+      .from(TABLE_NAME)
+      .select("*")
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true });
 
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return data as Guest[];
+    if (params.search) {
+      // Search by name, document or email
+      query = query.or(`full_name.ilike.%${params.search}%,document_id.ilike.%${params.search}%,email.ilike.%${params.search}%`);
+    }
+    return query;
+  };
+
+  const data = await fetchAll<Guest>((from, to) => buildQuery().range(from, to), { label: "getGuests" });
+  return data;
 }
 
 export async function createGuest(guest: GuestInsert) {

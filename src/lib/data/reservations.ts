@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/fetchAll";
+import { checkoutIsStrict } from "@/lib/reservations/range";
 
 const TABLE_NAME = "hostal_reservations";
 
@@ -8,6 +10,9 @@ export type ReservationFilters = {
   status?: string;
   roomId?: number;
   companyId?: number;
+  // Rango de ESTADÍA (ambos extremos incluidos): check_in <= to && check_out >= from.
+  // Distinto de fromDate/toDate, que filtran solo por check_in.
+  range?: { from: string; to: string };
 };
 
 // ---------- HELPERS ----------
@@ -103,11 +108,13 @@ function generateCode(): string {
 
 export async function getReservations(filters: ReservationFilters = {}) {
   const supabase = createClient();
+  const { fromDate, toDate, status, roomId, companyId, range } = filters;
 
-  let query = supabase
-    .from(TABLE_NAME)
-    .select(
-      `
+  const buildQuery = () => {
+    let query = supabase
+      .from(TABLE_NAME)
+      .select(
+        `
       id,
       room_id,
       guest_id,
@@ -137,34 +144,46 @@ export async function getReservations(filters: ReservationFilters = {}) {
       hostal_guests ( id, full_name, phone, email, document_id ),
       hostal_companies ( id, name )
     `
-    )
-    .order("check_in", { ascending: true });
+      )
+      // id como desempate: el orden debe ser determinista para paginar sin repetir ni saltar filas
+      .order("check_in", { ascending: true })
+      .order("id", { ascending: true });
 
-  const { fromDate, toDate, status, roomId, companyId } = filters;
+    // 🔹 Filtro SIMPLE: check_in entre fromDate y toDate
+    if (fromDate) {
+      query = query.gte("check_in", fromDate);
+    }
+    if (toDate) {
+      query = query.lte("check_in", toDate);
+    }
 
-  // 🔹 Filtro SIMPLE: check_in entre fromDate y toDate
-  if (fromDate) {
-    query = query.gte("check_in", fromDate);
-  }
-  if (toDate) {
-    query = query.lte("check_in", toDate);
-  }
+    // 🔹 Filtro de estadía (misma regla que lib/reservations/range.ts):
+    //    varios días => check_in <= to && check_out > from; un solo día => check_out >= from.
+    if (range) {
+      query = query.lte("check_in", range.to);
+      query = checkoutIsStrict(range.from, range.to)
+        ? query.gt("check_out", range.from)
+        : query.gte("check_out", range.from);
+    }
 
-  if (status && status !== "all") {
-    query = query.eq("status", status);
-  }
+    if (status && status !== "all") {
+      query = query.eq("status", status);
+    }
 
-  if (roomId) {
-    query = query.eq("room_id", roomId);
-  }
+    if (roomId) {
+      query = query.eq("room_id", roomId);
+    }
 
-  if (companyId) {
-    query = query.eq("company_id", companyId);
-  }
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+    return query;
+  };
 
-  const { data, error } = await query;
-
-  if (error) {
+  let data: any[];
+  try {
+    data = await fetchAll<any>((from, to) => buildQuery().range(from, to), { label: "getReservations" });
+  } catch (error: any) {
     console.error("Error getReservations:", error);
     throw new Error(error.message);
   }
@@ -175,12 +194,16 @@ export async function getReservations(filters: ReservationFilters = {}) {
   const pendingIds = rows.filter((r) => r.status === "pending").map((r) => r.id);
   if (pendingIds.length > 0) {
     try {
-      const { data: holds } = await supabase
-        .from(TABLE_NAME)
-        .select("id, hold_expires_at")
-        .in("id", pendingIds)
-        .not("hold_expires_at", "is", null);
-      const byId = new Map<number, string>((holds ?? []).map((h: any) => [h.id, h.hold_expires_at]));
+      // En bloques: .in() con miles de ids rompería la URL de la consulta.
+      const byId = new Map<number, string>();
+      for (let i = 0; i < pendingIds.length; i += 200) {
+        const { data: holds } = await supabase
+          .from(TABLE_NAME)
+          .select("id, hold_expires_at")
+          .in("id", pendingIds.slice(i, i + 200))
+          .not("hold_expires_at", "is", null);
+        (holds ?? []).forEach((h: any) => byId.set(h.id, h.hold_expires_at));
+      }
       rows.forEach((r) => {
         if (byId.has(r.id)) r.hold_expires_at = byId.get(r.id);
       });
@@ -193,10 +216,10 @@ export async function getReservations(filters: ReservationFilters = {}) {
     "[getReservations] filtros:",
     filters,
     " → filas:",
-    data?.length ?? 0
+    data.length
   );
 
-  return data || [];
+  return data;
 }
 
 export async function getReservationById(id: number) {

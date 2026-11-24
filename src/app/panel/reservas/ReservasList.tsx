@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { useEffect, useMemo, useState } from "react";
 import { Trash2, Edit2 } from "lucide-react";
 import ReservationFormModal from "@/components/reservations/ReservationFormModal";
 import { HostalRoom, Guest } from "@/types/hostal";
 import { formatSantiagoShort } from "@/lib/public-api/format";
+import { stayOverlapsRange } from "@/lib/reservations/range";
+import { formatDateCL } from "@/lib/utils/date";
 
 type Reservation = {
     id: number;
@@ -29,6 +29,8 @@ type Reservation = {
 type Props = {
     initialReservations: Reservation[];
     today: string; // "YYYY-MM-DD"
+    from: string; // rango activo que el servidor ya filtró
+    to: string;
     rooms: HostalRoom[];
     guests: Guest[];
 };
@@ -41,23 +43,23 @@ function parseDateSafe(value: string | undefined): Date | null {
 
 // Reserva se considera dentro del rango si se cruza con [from, to]
 function overlapsRange(res: Reservation, from: string, to: string): boolean {
-    const fromDate = parseDateSafe(from);
-    const toDate = parseDateSafe(to);
-    const checkIn = parseDateSafe(res.check_in);
-    const checkOut = parseDateSafe(res.check_out);
-
-    if (!fromDate || !toDate || !checkIn || !checkOut) return false;
-
-    // check_in <= to && check_out >= from
-    return checkIn <= toDate && checkOut >= fromDate;
+    // check_in <= to && check_out >= from (misma regla que aplica el servidor)
+    return stayOverlapsRange(res.check_in, res.check_out, from, to);
 }
 
-export default function ReservasList({ initialReservations, today, rooms, guests }: Props) {
+export default function ReservasList({ initialReservations, from: activeFrom, to: activeTo, rooms, guests }: Props) {
     const router = useRouter();
-    const [from, setFrom] = useState<string>(today);
-    const [to, setTo] = useState<string>(today);
+    const [from, setFrom] = useState<string>(activeFrom);
+    const [to, setTo] = useState<string>(activeTo);
     const [reservations, setReservations] =
         useState<Reservation[]>(initialReservations);
+
+    // Al cambiar el rango, el servidor entrega otra lista: se vuelve a sincronizar.
+    useEffect(() => {
+        setReservations(initialReservations);
+        setFrom(activeFrom);
+        setTo(activeTo);
+    }, [initialReservations, activeFrom, activeTo]);
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
     // Modal state
@@ -78,11 +80,11 @@ export default function ReservasList({ initialReservations, today, rooms, guests
 
         if (!fromDate || !toDate) return;
 
-        if (fromDate > toDate) {
-            setFrom(to);
-            setTo(from);
-        }
-        // El recalculo lo hace useMemo
+        // Se consulta al servidor con el rango elegido (ordenado de menor a mayor).
+        const [f, t] = fromDate > toDate ? [to, from] : [from, to];
+        setFrom(f);
+        setTo(t);
+        router.push(`/panel/reservas?from=${f}&to=${t}`);
     };
 
     const handleDelete = async (id: number) => {
@@ -106,6 +108,11 @@ export default function ReservasList({ initialReservations, today, rooms, guests
         } finally {
             setDeletingId(null);
         }
+    };
+
+    const handleNew = () => {
+        setEditingReservation(null);
+        setIsModalOpen(true);
     };
 
     const handleEdit = (res: Reservation) => {
@@ -159,6 +166,14 @@ export default function ReservasList({ initialReservations, today, rooms, guests
                 >
                     Aplicar
                 </button>
+
+                <button
+                    type="button"
+                    onClick={handleNew}
+                    className="h-[38px] px-5 rounded-md bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors ml-auto"
+                >
+                    Nueva reserva
+                </button>
             </div>
 
             {/* TEXTO DE RANGO */}
@@ -185,17 +200,9 @@ export default function ReservasList({ initialReservations, today, rooms, guests
                                 : "Sin habitación");
                         const guestName = res.hostal_guests?.full_name ?? "Sin huésped";
 
-                        const inLabel = parseDateSafe(res.check_in)
-                            ? format(parseDateSafe(res.check_in)!, "dd-MM-yyyy", {
-                                locale: es,
-                            })
-                            : res.check_in;
-
-                        const outLabel = parseDateSafe(res.check_out)
-                            ? format(parseDateSafe(res.check_out)!, "dd-MM-yyyy", {
-                                locale: es,
-                            })
-                            : res.check_out;
+                        // Las columnas date se formatean sobre el texto YYYY-MM-DD (sin pasar por Date/zona horaria).
+                        const inLabel = formatDateCL(String(res.check_in).slice(0, 10));
+                        const outLabel = formatDateCL(String(res.check_out).slice(0, 10));
 
                         const isDeleting = deletingId === res.id;
 
