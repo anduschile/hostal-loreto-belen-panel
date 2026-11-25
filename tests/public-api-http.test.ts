@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { mapDbError } from "../src/lib/public-api/errors";
-import { corsHeaders, getAllowedOrigins, DEFAULT_ALLOWED_ORIGINS, preflightResponse } from "../src/lib/public-api/cors";
+import { corsHeaders, getAllowedOrigins, DEFAULT_ALLOWED_ORIGINS, preflightResponse, isOriginAllowed } from "../src/lib/public-api/cors";
 
 test("mapeo de errores de la base", () => {
     assert.deepEqual(mapDbError("NO_DISPONIBLE"), { status: 409, error: "no_disponible" });
@@ -48,6 +48,36 @@ test("CORS: lista por defecto, variable de entorno y localhost solo fuera de pro
     assert.ok(getAllowedOrigins(undefined, false).includes("http://localhost:5173"));
     assert.deepEqual(getAllowedOrigins(" https://a.cl/ , https://b.cl ", true), ["https://a.cl", "https://b.cl"]);
     assert.deepEqual(getAllowedOrigins("", true), DEFAULT_ALLOWED_ORIGINS);
+});
+
+test("CORS: previews de Vercel de loretobelen-web permitidos, incluso con lista de entorno", () => {
+    const allowed = getAllowedOrigins("https://a.cl", true);
+    for (const o of [
+        "https://loretobelen-web-abc123.vercel.app",
+        "https://loretobelen-web-git-main-joseurraira-9244s-projects.vercel.app",
+        "https://loretobelen-9xk2f1a-joseurraira-9244s-projects.vercel.app",
+    ]) {
+        assert.equal(corsHeaders(o, allowed)["Access-Control-Allow-Origin"], o, o);
+    }
+});
+
+test("CORS: patrones no admiten dominios parecidos, http ni subdominios extra", () => {
+    const allowed = getAllowedOrigins(undefined, true);
+    for (const o of [
+        "http://loretobelen-web-abc.vercel.app",
+        "https://loretobelen-web-abc.vercel.app.evil.example",
+        "https://evil.example/loretobelen-web-abc.vercel.app",
+        "https://x.loretobelen-web-abc.vercel.app",
+        "https://loretobelen-web-a.b.vercel.app",
+        "https://loretobelen-web-.evil.app",
+        "https://loretobelen-abc-otro-team.vercel.app",
+        "https://loretobelen-abc-joseurraira-9244s-projects.vercel.app.evil.example",
+        "https://otro-joseurraira-9244s-projects.vercel.app",
+        "https://loretobelen-web.vercel.app",
+    ]) {
+        assert.equal(isOriginAllowed(o, allowed), false, o);
+    }
+    assert.equal(isOriginAllowed(null, allowed), false);
 });
 
 test("preflight: 204 con CORS para origen permitido y sin CORS para otro", () => {
