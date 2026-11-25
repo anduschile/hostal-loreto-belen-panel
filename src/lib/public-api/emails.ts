@@ -1,6 +1,7 @@
 // Correos de la API pública (Resend). Solo se envían si PUBLIC_API_SEND_EMAILS === "true".
 // Un fallo de envío nunca debe hacer fallar la solicitud.
 
+import { getAppBaseUrl } from "../config/appUrl";
 import { formatDMY, formatSantiagoFull } from "./format";
 
 const FROM = "Hostal Loreto Belén <reservas@loretobelen.cl>";
@@ -82,6 +83,11 @@ Saludos,<br>
     return { subject: `Hemos recibido su solicitud de reserva (${d.code})`, html };
 }
 
+/** Enlace al panel que abre la Lista de Reservas en esta solicitud (exige iniciar sesión; no aprueba nada). */
+export function staffRequestLink(code: string): string {
+    return `${getAppBaseUrl()}/panel/reservas?codigo=${encodeURIComponent(code)}`;
+}
+
 /** (b) Correo interno a recepción: todos los datos de la solicitud. */
 export function buildStaffEmail(d: RequestEmailData): { subject: string; html: string } {
     const row = (label: string, value: unknown) =>
@@ -100,6 +106,7 @@ export function buildStaffEmail(d: RequestEmailData): { subject: string; html: s
             row("Teléfono", d.phone),
             row("Notas", d.notes),
             row("Reserva provisoria hasta", formatSantiagoFull(d.hold_expires_at)),
+            `<br><a href="${escapeHtml(staffRequestLink(d.code))}" style="display:inline-block;padding:10px 18px;background:#111827;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Ver solicitud en el panel</a>`,
         ].join("\n")
     );
     return { subject: `Nueva solicitud de reserva web ${d.code}`, html };

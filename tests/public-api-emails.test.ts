@@ -71,3 +71,21 @@ test("los correos solo se envían si PUBLIC_API_SEND_EMAILS vale exactamente \"t
     await sendRequestEmails(data);
     if (prev !== undefined) process.env.PUBLIC_API_SEND_EMAILS = prev;
 });
+
+test("correo a recepción: enlace directo al panel con el código de la reserva", () => {
+    const saved = { app: process.env.NEXT_PUBLIC_APP_URL };
+    process.env.NEXT_PUBLIC_APP_URL = "https://panel.example.cl/";
+    try {
+        const { html } = buildStaffEmail({ ...data, code: "W20261210120000123" });
+        assert.ok(html.includes('href="https://panel.example.cl/panel/reservas?codigo=W20261210120000123"'));
+        assert.ok(html.includes("Ver solicitud en el panel"));
+        // un código con caracteres especiales no puede romper el atributo ni inyectar HTML
+        const raro = buildStaffEmail({ ...data, code: 'A"><b>&x' }).html;
+        assert.ok(!raro.includes('"><b>'));
+        assert.ok(raro.includes("codigo=A%22%3E%3Cb%3E%26x"));
+        // el correo al huésped no lleva el enlace del panel
+        assert.ok(!buildGuestEmail(data).html.includes("/panel/reservas"));
+    } finally {
+        if (saved.app === undefined) delete process.env.NEXT_PUBLIC_APP_URL; else process.env.NEXT_PUBLIC_APP_URL = saved.app;
+    }
+});
