@@ -7,6 +7,7 @@ export const reservationStatusSchema = z.object({
         "checked_in",
         "checked_out",
         "cancelled",
+        "rechazada",
         "blocked",
     ]),
     // Solo lo respeta el servidor si el usuario autenticado es superadmin.

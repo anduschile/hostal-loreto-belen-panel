@@ -19,6 +19,7 @@ const STATUS_STYLES: Record<string, string> = {
     checked_in: "bg-blue-100 border-l-4 border-blue-500 text-blue-900 hover:bg-blue-200",
     checked_out: "bg-slate-100 border-l-4 border-slate-400 text-slate-700 hover:bg-slate-200",
     blocked: "bg-red-100 border-l-4 border-red-500 text-red-900 hover:bg-red-200",
+    rechazada: "bg-rose-50 border-l-4 border-rose-300 text-rose-400 opacity-70 line-through",
     cancelled: "bg-gray-50 border-gray-400 text-gray-400 opacity-60 line-through border-l-2",
 };
 

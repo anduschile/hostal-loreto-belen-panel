@@ -4,6 +4,8 @@ import { reservationStatusSchema } from "@/lib/validators/reservation-status";
 import { revalidatePath } from "next/cache";
 import { guardOverlap, fetchStoredReservation } from "@/lib/reservations/overlapGuard";
 import { appendNote } from "@/lib/reservations/overlap";
+import { buildStatusUpdatePayload, notifyConfirmation, planStatusChange } from "@/lib/reservations/statusChange";
+import { sendConfirmationEmail } from "@/lib/public-api/emails";
 
 export async function PATCH(
     req: NextRequest,
@@ -49,8 +51,13 @@ export async function PATCH(
         });
         if ("response" in guard) return guard.response;
 
-        const updatePayload: { status: string; notes?: string } = { status };
-        if (guard.notesLine) updatePayload.notes = appendNote(prev.notes, guard.notesLine);
+        // Solicitudes web: al confirmar o rechazar se limpia el hold; al confirmar además se avisa al huésped.
+        const plan = planStatusChange(prev, status);
+        const updatePayload = buildStatusUpdatePayload(
+            status,
+            plan,
+            guard.notesLine ? appendNote(prev.notes, guard.notesLine) : null
+        );
 
         // 2. Database Update
         const supabase = createClient();
@@ -74,6 +81,11 @@ export async function PATCH(
                 { ok: false, error: "Reserva no encontrada" },
                 { status: 404 }
             );
+        }
+
+        // El correo nunca hace fallar el cambio de estado (notifyConfirmation no lanza).
+        if (plan.sendConfirmation) {
+            await notifyConfirmation(supabase as any, reservationId, sendConfirmationEmail);
         }
 
         // Optional: Revalidate paths if caching is aggressive

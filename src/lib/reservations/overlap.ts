@@ -21,7 +21,7 @@ export type OverlapQuery = {
 };
 
 /** Estados que no ocupan la habitación. */
-export const IGNORED_STATUSES = ["cancelled", "cancelada", "checked_out", "salida"] as const;
+export const IGNORED_STATUSES = ["cancelled", "cancelada", "rechazada", "checked_out", "salida"] as const;
 
 const day = (s: string) => String(s).slice(0, 10);
 

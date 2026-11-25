@@ -18,7 +18,7 @@ const ReservationBase = z.object({
     check_out: z.string().min(1, "La fecha de salida es obligatoria"),
 
     status: z
-        .enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "blocked"])
+        .enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "rechazada", "blocked"])
         .default("pending"),
 
     total_price: z.number().nonnegative().default(0),

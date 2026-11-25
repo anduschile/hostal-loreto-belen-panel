@@ -74,10 +74,10 @@ export async function findConflicts(q: Query): Promise<OverlapConflict[]> {
 /** Fila guardada de una reserva (solo lo necesario para decidir si hay que validar). */
 export async function fetchStoredReservation(
     id: number
-): Promise<(ReservationShape & { id: number; notes: string | null }) | null> {
+): Promise<(ReservationShape & { id: number; notes: string | null; source: string | null }) | null> {
     const { data, error } = await createClient()
         .from("hostal_reservations")
-        .select("id, room_id, fulfillment_type, status, check_in, check_out, notes")
+        .select("id, room_id, fulfillment_type, status, check_in, check_out, notes, source")
         .eq("id", id)
         .maybeSingle();
     if (error) throw new Error(error.message);
