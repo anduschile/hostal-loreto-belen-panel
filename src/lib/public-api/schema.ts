@@ -68,6 +68,7 @@ export const ReservationRequestSchema = z
             .pipe(z.email().max(160)),
         phone: z.string().transform(normalizeSpaces).pipe(z.string().max(30)).optional(),
         notes: z.string().transform(normalizeSpaces).pipe(z.string().max(500)).optional(),
+        idempotency_key: z.string().transform(normalizeSpaces).pipe(z.string().max(64)).optional(),
         // Honeypot: un humano nunca lo completa.
         website: z.string().max(500).optional(),
     })
