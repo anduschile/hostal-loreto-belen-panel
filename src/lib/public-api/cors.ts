@@ -12,6 +12,22 @@ export const DEFAULT_ALLOWED_ORIGINS = [
     "https://nuevo.loretobelen.cl",
 ];
 
+/**
+ * Patrones de previews de Vercel del proyecto loretobelen-web. Se aplican SIEMPRE (también si
+ * PUBLIC_API_ALLOWED_ORIGINS define la lista exacta). Solo https, host completo anclado y un
+ * único segmento de subdominio [a-z0-9-], sin puntos: no admiten otros dominios.
+ */
+export const ALLOWED_ORIGIN_PATTERNS: RegExp[] = [
+    /^https:\/\/loretobelen-web-[a-z0-9-]+\.vercel\.app$/,
+    /^https:\/\/loretobelen-[a-z0-9-]+-joseurraira-9244s-projects\.vercel\.app$/,
+];
+
+/** True si el origen está en la lista exacta o coincide con un patrón permitido. */
+export function isOriginAllowed(origin: string | null | undefined, allowed: string[]): boolean {
+    if (!origin) return false;
+    return allowed.includes(origin) || ALLOWED_ORIGIN_PATTERNS.some((re) => re.test(origin));
+}
+
 const DEV_ORIGIN = "http://localhost:5173";
 
 /** Lista de orígenes permitidos: PUBLIC_API_ALLOWED_ORIGINS (coma) o la lista por defecto. */
@@ -28,7 +44,7 @@ export function getAllowedOrigins(envValue: string | undefined, isProduction: bo
 /** Encabezados CORS: el origen exacto solo si está en la lista. */
 export function corsHeaders(origin: string | null | undefined, allowed: string[]): Record<string, string> {
     const headers: Record<string, string> = { Vary: "Origin" };
-    if (origin && allowed.includes(origin)) {
+    if (origin && isOriginAllowed(origin, allowed)) {
         headers["Access-Control-Allow-Origin"] = origin;
         headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
         headers["Access-Control-Allow-Headers"] = "Content-Type";
