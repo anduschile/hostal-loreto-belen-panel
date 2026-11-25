@@ -85,6 +85,7 @@ export default function ReservasClient({
             case "confirmed": return "bg-green-100 text-green-800";
             case "pending": return "bg-yellow-100 text-yellow-800";
             case "cancelled": return "bg-red-100 text-red-800";
+            case "rechazada": return "bg-rose-50 text-rose-500 line-through";
             case "checked_in": return "bg-blue-100 text-blue-800";
             case "checked_out": return "bg-gray-100 text-gray-800";
             default: return "bg-gray-100 text-gray-600";
@@ -92,7 +93,7 @@ export default function ReservasClient({
     };
 
     const friendlyStatus = (s: string) => {
-        const map: any = { pending: "Pendiente", confirmed: "Confirmada", checked_in: "Check-in", checked_out: "Check-out", cancelled: "Cancelada", blocked: "Bloqueada" };
+        const map: any = { pending: "Pendiente", confirmed: "Confirmada", checked_in: "Check-in", checked_out: "Check-out", cancelled: "Cancelada", rechazada: "Rechazada", blocked: "Bloqueada" };
         return map[s] || s;
     };
 

@@ -67,7 +67,7 @@ export async function getDaybook(date: string): Promise<DaybookEntry[]> {
     `)
         .lte("check_in", date)
         .gte("check_out", date)
-        .not("status", "eq", "cancelled");
+        .not("status", "in", "(cancelled,rechazada)");
 
     if (error) {
         console.error("Error getDaybook:", error);

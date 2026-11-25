@@ -107,6 +107,7 @@ export type ReservationStatus =
   | "checked_in"
   | "checked_out"
   | "cancelled"
+  | "rechazada"
   | "blocked";
 
 export interface Reservation {

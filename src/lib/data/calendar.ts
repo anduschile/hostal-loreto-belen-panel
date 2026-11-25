@@ -19,7 +19,7 @@ export type CalendarReservation = {
     company_name?: string | null;
     check_in: string; // YYYY-MM-DD
     check_out: string; // YYYY-MM-DD
-    status: "pending" | "confirmed" | "checked_in" | "checked_out" | "cancelled" | "blocked";
+    status: "pending" | "confirmed" | "checked_in" | "checked_out" | "cancelled" | "rechazada" | "blocked";
     total_price: number;
     notes?: string | null;
     adults: number;
@@ -106,9 +106,8 @@ export async function getCalendarData(
     if (filters?.status && filters.status !== "all") {
         resQuery = resQuery.eq("status", filters.status);
     } else {
-        if (filters?.status !== "cancelled") {
-            resQuery = resQuery.neq("status", "cancelled");
-        }
+        // Por defecto se ocultan las canceladas y las rechazadas (solo se ven filtrando por ese estado).
+        resQuery = resQuery.not("status", "in", "(cancelled,rechazada)");
     }
 
     if (filters?.company_id) {

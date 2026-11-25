@@ -43,7 +43,7 @@ export function peopleLabel(adults: number, children: number): string {
 }
 
 function roomLabel(type: string): string {
-    return ROOM_LABELS[type] ?? type;
+    return ROOM_LABELS[String(type ?? "").toLowerCase()] ?? type;
 }
 
 function layout(title: string, body: string): string {
@@ -105,6 +105,26 @@ export function buildStaffEmail(d: RequestEmailData): { subject: string; html: s
     return { subject: `Nueva solicitud de reserva web ${d.code}`, html };
 }
 
+export type ConfirmationEmailData = Omit<RequestEmailData, "hold_expires_at" | "phone" | "notes">;
+
+/** (c) Correo al huésped cuando recepción confirma una solicitud web: sin precios. */
+export function buildConfirmationEmail(d: ConfirmationEmailData): { subject: string; html: string } {
+    const html = layout(
+        "Su reserva ha sido confirmada",
+        `Estimado/a <strong>${escapeHtml(d.full_name)}</strong>,<br><br>
+Nos alegra informarle que su reserva ha sido confirmada.<br><br>
+<strong>Código:</strong> ${escapeHtml(d.code)}<br>
+<strong>Entrada:</strong> ${escapeHtml(formatDMY(d.check_in))}<br>
+<strong>Salida:</strong> ${escapeHtml(formatDMY(d.check_out))}<br>
+<strong>Tipo de habitación:</strong> ${escapeHtml(roomLabel(d.room_type))}<br>
+<strong>Personas:</strong> ${escapeHtml(peopleLabel(d.adults, d.children))}<br><br>
+Le esperamos.<br><br>
+Saludos,<br>
+<strong>Hostal Loreto Belén</strong>`
+    );
+    return { subject: `Su reserva ha sido confirmada (${d.code})`, html };
+}
+
 export function emailsEnabled(env: Record<string, string | undefined> = process.env): boolean {
     return env.PUBLIC_API_SEND_EMAILS === "true";
 }
@@ -142,5 +162,39 @@ export async function sendRequestEmails(d: RequestEmailData): Promise<void> {
         });
     } catch {
         console.error("[public-api] Error inesperado enviando correos.");
+    }
+}
+
+/**
+ * Envía al huésped el correo de confirmación (mismo interruptor, proveedor y remitente que los demás).
+ * Nunca lanza: un fallo de envío no debe afectar el cambio de estado. Devuelve true si Resend aceptó el correo.
+ */
+export async function sendConfirmationEmail(d: ConfirmationEmailData): Promise<boolean> {
+    if (!emailsEnabled()) return false;
+
+    try {
+        if (!process.env.RESEND_API_KEY) {
+            console.error("[public-api] Correos habilitados pero falta RESEND_API_KEY.");
+            return false;
+        }
+        const { resend } = await import("../email/resendClient");
+        const guest = buildConfirmationEmail(d);
+
+        const [r] = await Promise.allSettled([
+            resend.emails.send({ from: FROM, replyTo: REPLY_TO, to: [d.email], subject: guest.subject, html: guest.html }),
+        ]);
+
+        if (r.status === "rejected") {
+            console.error("[public-api] Falló el envío del correo de confirmación al huésped.");
+            return false;
+        }
+        if (r.value?.error) {
+            console.error(`[public-api] Resend rechazó el correo de confirmación: ${r.value.error.name ?? "error"}.`);
+            return false;
+        }
+        return true;
+    } catch {
+        console.error("[public-api] Error inesperado enviando el correo de confirmación.");
+        return false;
     }
 }

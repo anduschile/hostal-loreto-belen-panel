@@ -267,6 +267,7 @@ export default function ReservationFormModal({
             pending: "Pendiente",
             confirmed: "Confirmada",
             checked_in: "Check-in",
+            rechazada: "Rechazada",
             blocked: "Bloqueada",
         };
         return s ? map[s] ?? s : "sin estado";
@@ -1547,6 +1548,7 @@ export default function ReservationFormModal({
                                     <option value="checked_in">🔵 Check-in</option>
                                     <option value="checked_out">⚫ Check-out</option>
                                     <option value="cancelled">🔴 Cancelada</option>
+                                    <option value="rechazada">⛔ Rechazada</option>
                                     <option value="blocked">🚫 Bloqueada</option>
                                 </select>
 

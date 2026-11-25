@@ -61,6 +61,7 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
         setTo(activeTo);
     }, [initialReservations, activeFrom, activeTo]);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [actingId, setActingId] = useState<number | null>(null);
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -107,6 +108,41 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
             alert(e.message || "Error al eliminar la reserva");
         } finally {
             setDeletingId(null);
+        }
+    };
+
+    // Solicitudes web pendientes: confirmar (-> confirmed) o rechazar (-> rechazada) con el endpoint de estado.
+    const handleSolicitud = async (id: number, status: "confirmed" | "rechazada") => {
+        const ok = window.confirm(
+            status === "confirmed"
+                ? `¿Confirmar la solicitud #${id}? Se enviará un correo de confirmación al huésped.`
+                : `¿Rechazar la solicitud #${id}? No se enviará correo al huésped.`
+        );
+        if (!ok) return;
+
+        try {
+            setActingId(id);
+            const res = await fetch(`/api/reservations/${id}/status`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || json.ok === false) {
+                if (json.error === "habitacion_ocupada") {
+                    throw new Error("La habitación ya tiene una reserva en esas fechas; no se puede confirmar.");
+                }
+                throw new Error(typeof json.error === "string" ? json.error : "Error al actualizar el estado");
+            }
+
+            setReservations((prev) =>
+                prev.map((r) => (r.id === id ? { ...r, status, hold_expires_at: null } : r))
+            );
+            router.refresh();
+        } catch (e: any) {
+            alert(e.message || "Error al actualizar el estado");
+        } finally {
+            setActingId(null);
         }
     };
 
@@ -225,7 +261,7 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
                                             {roomName} — {inLabel} → {outLabel}
                                         </div>
                                         {res.status && (
-                                            <div className="text-[11px] uppercase tracking-wide text-gray-400 mt-1">
+                                            <div className={`text-[11px] uppercase tracking-wide mt-1 ${res.status === "rechazada" ? "text-rose-500" : "text-gray-400"}`}>
                                                 Estado: {res.status}
                                                 {res.status === "pending" && res.hold_expires_at && (
                                                     <span className="ml-2 normal-case text-amber-600">
@@ -256,6 +292,27 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
                                         </button>
                                     </div>
                                 </div>
+
+                                {res.source === "web" && res.status === "pending" && (
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSolicitud(res.id, "confirmed")}
+                                            disabled={actingId === res.id}
+                                            className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                                        >
+                                            Confirmar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSolicitud(res.id, "rechazada")}
+                                            disabled={actingId === res.id}
+                                            className="rounded-md border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                                        >
+                                            Rechazar
+                                        </button>
+                                    </div>
+                                )}
 
                                 {typeof res.total_price === "number" && (
                                     <div className="text-[11px] text-gray-500">

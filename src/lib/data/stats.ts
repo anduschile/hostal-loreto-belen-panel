@@ -158,7 +158,7 @@ export async function getDashboardStats(
             company_id, billing_type, company_name_snapshot,
             hostal_companies (id, name)
         `)
-                    .neq("status", "cancelled")
+                    .not("status", "in", "(cancelled,rechazada)")
                     .lt("check_in", nextDay)
                     .gt("check_out", fromDate)
                     .order("check_in", { ascending: true })
@@ -264,7 +264,7 @@ export async function getDetailedStats(params: StatsParams): Promise<DetailedSta
             id, total_price, company_id, billing_type, company_name_snapshot,
             hostal_companies (id, name)
         `)
-                .neq("status", "cancelled")
+                .not("status", "in", "(cancelled,rechazada)")
                 .lt("check_in", nextDay)
                 .gt("check_out", fromDate)
                 .order("check_in", { ascending: true })
@@ -333,7 +333,7 @@ export async function getDetailedStats(params: StatsParams): Promise<DetailedSta
         (from, to) =>
             supabase.from("hostal_reservations")
                 .select(`id, check_in, check_out, room_id`)
-                .neq("status", "cancelled")
+                .not("status", "in", "(cancelled,rechazada)")
                 .lt("check_in", nextDay)
                 .gt("check_out", fromDate)
                 .order("check_in", { ascending: true })

@@ -131,6 +131,7 @@ export default function CalendarHeader({ currentDate, onDateChange, viewMode, on
                     <option value="checked_in">In-House</option>
                     <option value="checked_out">Check-Out</option>
                     <option value="cancelled">Cancelada</option>
+                    <option value="rechazada">Rechazada</option>
                 </select>
 
                 {/* ROOM TYPE FILTER — CORREGIDO */}

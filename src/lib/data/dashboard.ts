@@ -35,7 +35,7 @@ export async function getDashboardStats(today: string): Promise<DashboardStats> 
         .select("room_id", { count: "exact", head: true })
         .lte("check_in", today)
         .gt("check_out", today)
-        .not("status", "in", "('cancelled','blocked','checked_out')");
+        .not("status", "in", "('cancelled','rechazada','blocked','checked_out')");
 
     if (occupError) {
         console.error("Error fetching occupied rooms:", occupError);
