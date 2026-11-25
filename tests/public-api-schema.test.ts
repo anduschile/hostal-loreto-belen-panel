@@ -109,3 +109,11 @@ test("disponibilidad: consulta válida y noches", () => {
     assert.equal(nightsBetween("2026-12-28", "2027-01-02"), 5);
     assert.equal(AvailabilityQuerySchema.safeParse({ check_in: "2026-12-28" }).success, false);
 });
+
+test("idempotency_key es opcional, se normaliza y admite hasta 64 caracteres", () => {
+    assert.equal(ReservationRequestSchema.safeParse(valid).data?.idempotency_key, undefined);
+    const k = "a1b2c3d4-e5f6-4789-8abc-def012345678";
+    assert.equal(ReservationRequestSchema.safeParse({ ...valid, idempotency_key: ` ${k} ` }).data?.idempotency_key, k);
+    assert.ok(ReservationRequestSchema.safeParse({ ...valid, idempotency_key: "k".repeat(64) }).success);
+    assert.equal(ReservationRequestSchema.safeParse({ ...valid, idempotency_key: "k".repeat(65) }).success, false);
+});

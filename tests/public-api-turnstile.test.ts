@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 const env = process.env as Record<string, string | undefined>;
 let rpcCalls = 0;
+let lastRpcArgs: Record<string, unknown> | undefined;
 let fetchCalls: Array<{ url: string; body: URLSearchParams }> = [];
 let fetchImpl: (url: string, init: any) => Promise<Response> = async () => Response.json({ success: true });
 const realFetch = globalThis.fetch;
@@ -14,8 +15,9 @@ before(() => {
     mock.module(new URL("../src/lib/supabase/server.ts", import.meta.url).href, {
         namedExports: {
             createClient: () => ({
-                rpc: async () => {
+                rpc: async (_fn: string, args: Record<string, unknown>) => {
                     rpcCalls++;
+                    lastRpcArgs = args;
                     return { data: [{ out_reservation_id: 1, out_code: "LB-00001", out_hold_expires_at: "2026-12-01T00:00:00Z" }], error: null };
                 },
             }),
@@ -29,6 +31,7 @@ before(() => {
 const saved = { secret: env.TURNSTILE_SECRET_KEY, node: env.NODE_ENV, salt: env.PUBLIC_API_HASH_SALT };
 beforeEach(() => {
     rpcCalls = 0;
+    lastRpcArgs = undefined;
     fetchCalls = [];
     env.TURNSTILE_SECRET_KEY = "test-secret-value";
     env.NODE_ENV = "test";
@@ -167,4 +170,18 @@ test("el secreto nunca aparece en respuestas ni en logs", async () => {
     const r = await post(valid);
     assert.ok(!JSON.stringify(r).includes("test-secret-value"));
     assert.ok(!logs.join("\n").includes("test-secret-value"));
+});
+
+test("idempotency_key del body se reenvía al RPC como p_idempotency_key; sin clave va null", async () => {
+    const key = "3f2b8c1e-9a4d-4e57-8b1a-0c6d2e7f9a10";
+    const r1 = await post({ ...valid, idempotency_key: key });
+    assert.equal(r1.status, 201);
+    assert.equal(lastRpcArgs?.p_idempotency_key, key);
+    const r2 = await post(valid);
+    assert.equal(r2.status, 201);
+    assert.equal(lastRpcArgs?.p_idempotency_key, null);
+    const r3 = await post({ ...valid, idempotency_key: "k".repeat(65) });
+    assert.equal(r3.status, 400);
+    assert.equal(r3.json.error, "solicitud_invalida");
+    assert.deepEqual(r3.json.fields, ["idempotency_key"]);
 });

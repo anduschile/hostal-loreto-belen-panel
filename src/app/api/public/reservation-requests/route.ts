@@ -116,6 +116,7 @@ export async function POST(req: Request) {
             p_email: d.email,
             p_phone: d.phone || null,
             p_notes: d.notes || null,
+            p_idempotency_key: d.idempotency_key || null,
             p_client_ref: clientRef,
             p_hold_hours: HOLD_HOURS,
         });
