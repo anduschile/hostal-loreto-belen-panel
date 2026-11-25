@@ -13,6 +13,7 @@ type Reservation = {
     id: number;
     check_in: string; // "YYYY-MM-DD"
     check_out: string; // "YYYY-MM-DD"
+    code?: string | null;
     status?: string | null;
     source?: string | null;
     hold_expires_at?: string | null;
@@ -33,6 +34,7 @@ type Props = {
     to: string;
     rooms: HostalRoom[];
     guests: Guest[];
+    highlightCode?: string | null; // solicitud a resaltar (enlace directo del correo)
 };
 
 function parseDateSafe(value: string | undefined): Date | null {
@@ -47,7 +49,7 @@ function overlapsRange(res: Reservation, from: string, to: string): boolean {
     return stayOverlapsRange(res.check_in, res.check_out, from, to);
 }
 
-export default function ReservasList({ initialReservations, from: activeFrom, to: activeTo, rooms, guests }: Props) {
+export default function ReservasList({ initialReservations, from: activeFrom, to: activeTo, rooms, guests, highlightCode }: Props) {
     const router = useRouter();
     const [from, setFrom] = useState<string>(activeFrom);
     const [to, setTo] = useState<string>(activeTo);
@@ -60,6 +62,13 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
         setFrom(activeFrom);
         setTo(activeTo);
     }, [initialReservations, activeFrom, activeTo]);
+    // Al llegar con ?codigo=, se lleva la vista a esa tarjeta (si no está en la lista, no pasa nada).
+    useEffect(() => {
+        if (!highlightCode) return;
+        const target = initialReservations.find((r) => r.code === highlightCode);
+        if (!target || target.status !== "pending") return;
+        document.getElementById(`reserva-${target.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, [highlightCode, initialReservations]);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [actingId, setActingId] = useState<number | null>(null);
 
@@ -241,11 +250,14 @@ export default function ReservasList({ initialReservations, from: activeFrom, to
                         const outLabel = formatDateCL(String(res.check_out).slice(0, 10));
 
                         const isDeleting = deletingId === res.id;
+                        const isHighlighted = !!highlightCode && res.code === highlightCode && res.status === "pending";
 
                         return (
                             <div
                                 key={res.id}
-                                className="border rounded-xl bg-white px-4 py-3 shadow-sm flex flex-col gap-2"
+                                id={`reserva-${res.id}`}
+                                data-highlighted={isHighlighted ? "true" : undefined}
+                                className={`border rounded-xl px-4 py-3 shadow-sm flex flex-col gap-2 ${isHighlighted ? "bg-amber-50 ring-2 ring-amber-400" : "bg-white"}`}
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div>

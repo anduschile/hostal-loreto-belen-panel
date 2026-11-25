@@ -222,6 +222,21 @@ export async function getReservations(filters: ReservationFilters = {}) {
   return data;
 }
 
+/** Busca una reserva por su código (enlace directo del correo). Nunca lanza: ante cualquier fallo devuelve null. */
+export async function getReservationByCode(code: string) {
+  try {
+    const { data, error } = await createClient()
+      .from(TABLE_NAME)
+      .select("code, check_in, check_out, status, source")
+      .eq("code", code)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as { code: string; check_in: string; check_out: string; status: string | null; source: string | null };
+  } catch {
+    return null;
+  }
+}
+
 export async function getReservationById(id: number) {
   const supabase = createClient();
 
