@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Trash2, AlertTriangle, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import DateRangeField from "@/components/quotes/DateRangeField";
@@ -123,6 +123,10 @@ export default function QuoteForm({
     );
     const [validity, setValidity] = useState(String(q?.validity_days ?? settings.validity_days));
     const [conditions, setConditions] = useState(q?.conditions ?? settings.default_conditions);
+    const [notes, setNotes] = useState(q?.notes ?? "");
+    const [saveCompany, setSaveCompany] = useState(false);
+    // Empresa recién creada en este formulario: si el guardado de la cotización falla y se reintenta, no se vuelve a crear.
+    const createdCompany = useRef<{ name: string; id: number } | null>(null);
     const [saving, setSaving] = useState(false);
 
     const company = companies.find((c) => String(c.id) === companyId);
@@ -203,11 +207,30 @@ export default function QuoteForm({
         setSaving(true);
         try {
             const editing = mode === "edit" && q;
+            let companyIdToSave: number | null = company?.id ?? null;
+            if (!company && saveCompany && companyName.trim()) {
+                const name = companyName.trim();
+                if (createdCompany.current?.name === name) {
+                    companyIdToSave = createdCompany.current.id;
+                } else {
+                    const cr = await fetch("/api/companies", {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ name, rut, contact_name: contact, contact_email: email }),
+                    });
+                    const cj = await cr.json().catch(() => ({}));
+                    if (!cr.ok || !cj.id) {
+                        toast.error(`No se pudo guardar la empresa: ${cj.error || "error desconocido"}. La cotización no se guardó.`);
+                        return;
+                    }
+                    createdCompany.current = { name, id: cj.id };
+                    companyIdToSave = cj.id;
+                }
+            }
             const res = await fetch(editing ? `/api/quotes/${q!.id}` : "/api/quotes", {
                 method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    company_id: company?.id ?? null, company_name: companyName, company_rut: rut, contact_name: contact, contact_email: email,
-                    ...(periodFromDates(lines.flatMap((l) => l.dates)) ?? { check_in: "", check_out: "" }), validity_days: Number(validity), conditions,
+                    company_id: companyIdToSave, company_name: companyName, company_rut: rut, contact_name: contact, contact_email: email,
+                    ...(periodFromDates(lines.flatMap((l) => l.dates)) ?? { check_in: "", check_out: "" }), validity_days: Number(validity), conditions, notes,
                     discount_mode: effMode, discount_type: manType, discount_value: Number(manValue) || 0, discount_reason: manReason,
                     lines: lines.map((l) => ({ occupancy: l.occupancy, rooms: Number(l.rooms), dates: l.dates, ...rateFields(l), passengers: l.passengers.split("\n") })),
                 }),
@@ -294,6 +317,11 @@ export default function QuoteForm({
                         <div><label className="text-xs text-slate-500">RUT</label><input value={rut} onChange={(e) => setRut(e.target.value)} className={input} placeholder="76.123.456-7" /></div>
                         <div><label className="text-xs text-slate-500">Contacto</label><input value={contact} onChange={(e) => setContact(e.target.value)} className={input} /></div>
                         <div className="md:col-span-2"><label className="text-xs text-slate-500">Correo</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} /></div>
+                        {!companyId && companyName.trim() && (
+                            <label className="md:col-span-2 flex items-center gap-2 text-sm text-slate-700">
+                                <input type="checkbox" checked={saveCompany} onChange={(e) => setSaveCompany(e.target.checked)} /> Guardar esta empresa para futuras cotizaciones
+                            </label>
+                        )}
                     </section>
 
                     <section className="space-y-2">
@@ -430,6 +458,8 @@ export default function QuoteForm({
                             </div>
                             <div><label className="text-xs text-slate-500">Condiciones (una por línea)</label>
                                 <textarea rows={4} value={conditions} onChange={(e) => setConditions(e.target.value)} className={input} /></div>
+                            <div><label className="text-xs text-slate-500">Observaciones (opcional)</label>
+                                <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className={input} /></div>
                         </div>
                         <div className="bg-slate-50 rounded-lg p-4 text-sm space-y-1 h-fit">
                             {calc.discount > 0 && (<>

@@ -57,6 +57,7 @@ export type QuoteRow = {
     validity_days: number;
     valid_until: string | null;
     conditions: string | null;
+    notes: string | null;
     status: QuoteStatus;
     sent_at: string | null;
     created_at?: string;
@@ -80,6 +81,7 @@ export type QuoteInput = {
     discount_reason?: string | null;
     validity_days?: number;
     conditions?: string | null;
+    notes?: string | null;
 };
 
 export interface QuoteRepo {
@@ -248,6 +250,7 @@ async function buildQuoteFields(deps: QuoteDeps, input: QuoteInput): Promise<Quo
         validity_days,
         valid_until: addDays(today, validity_days),
         conditions: input.conditions ?? settings.default_conditions,
+        notes: input.notes?.trim() || null,
     };
 }
 

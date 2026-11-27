@@ -22,6 +22,7 @@ const col = { occ: { width: 110 }, qty: { width: 60 }, nights: { width: 50 }, ra
 export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: QuoteCalcResult; logo?: Buffer | null }) {
     const code = formatQuoteCode(quote.number);
     const conditions = (quote.conditions || "").split("\n").map((s) => s.trim()).filter(Boolean);
+    const notes = (quote.notes || "").trim();
     const nights = calc.lines[0]?.nights ?? 0;
     // Todas las líneas con las mismas noches -> Entrada/Salida/Duración; si no -> «Primera noche · Última noche (salida …)»
     const { shared, text: stay } = stayText(quote.lines, quote.check_in, quote.check_out);
@@ -106,6 +107,13 @@ export function QuoteDocument({ quote, calc, logo }: { quote: QuoteRow; calc: Qu
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Condiciones de la estadía</Text>
                         {conditions.map((c, i) => (<Text key={i} style={{ marginBottom: 2 }}>• {c}</Text>))}
+                    </View>
+                )}
+
+                {notes.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Observaciones</Text>
+                        <Text>{notes}</Text>
                     </View>
                 )}
 

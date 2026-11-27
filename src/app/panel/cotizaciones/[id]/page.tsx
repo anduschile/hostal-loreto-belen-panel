@@ -159,6 +159,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
                 </ul>
             </section>
 
+            {quote.notes?.trim() && (
+                <section className="bg-white rounded-lg border border-slate-200 p-5 text-sm">
+                    <h2 className="font-semibold text-slate-700 mb-2">Observaciones</h2>
+                    <p className="text-slate-700 whitespace-pre-line">{quote.notes}</p>
+                </section>
+            )}
+
             <section className="bg-white rounded-lg border border-slate-200 p-5 space-y-3">
                 <h2 className="font-semibold text-slate-700">{isDraft ? "Enviar por correo" : "Reenviar por correo"}</h2>
                 <div className="flex flex-wrap gap-2 items-end">
