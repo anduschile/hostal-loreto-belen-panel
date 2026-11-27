@@ -49,9 +49,11 @@ export async function POST(req: Request) {
             updated_at: new Date().toISOString()
         };
 
-        const { error } = await supabaseAdmin
+        const { data: created, error } = await supabaseAdmin
             .from("hostal_companies")
-            .insert(companyData);
+            .insert(companyData)
+            .select("id")
+            .single();
 
         if (error) {
             console.error("Supabase insert error:", error);
@@ -59,7 +61,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: error.message || "Error al insertar la empresa en la base de datos." }, { status: 400 });
         }
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, id: created.id });
     } catch (error: any) {
         console.error("API Error:", error);
         return NextResponse.json({ error: error.message || "Error interno del servidor." }, { status: 500 });
