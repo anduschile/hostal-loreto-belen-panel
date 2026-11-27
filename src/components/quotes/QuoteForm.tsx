@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Trash2, AlertTriangle, X } from "lucide-react";
+import { Trash2, AlertTriangle, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import DateRangeField from "@/components/quotes/DateRangeField";
 import {
@@ -106,6 +106,11 @@ export default function QuoteForm({
     const q = quote ?? null;
     const [companyId, setCompanyId] = useState(q?.company_id ? String(q.company_id) : "");
     const [companyName, setCompanyName] = useState(q?.company_name ?? "");
+    // Buscador de empresa registrada: texto que ve el usuario (se sincroniza al elegir una empresa de la lista).
+    const [companySearch, setCompanySearch] = useState(
+        q?.company_id ? companies.find((c) => String(c.id) === String(q.company_id))?.name ?? "" : ""
+    );
+    const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const [rut, setRut] = useState(q?.company_rut ?? "");
     const [contact, setContact] = useState(q?.contact_name ?? "");
     const [email, setEmail] = useState(q?.contact_email ?? "");
@@ -147,11 +152,21 @@ export default function QuoteForm({
     const onCompany = (id: string) => {
         setCompanyId(id);
         const c = companies.find((x) => String(x.id) === id);
-        if (c) { setCompanyName(c.name); setRut(c.rut ?? ""); setContact(c.contact_name ?? ""); setEmail(c.contact_email ?? ""); }
+        if (c) { setCompanyName(c.name); setRut(c.rut ?? ""); setContact(c.contact_name ?? ""); setEmail(c.contact_email ?? ""); setCompanySearch(c.name); }
         // Por defecto: «De la empresa» si tiene descuento; si no, «Sin descuento» (el modo manual se respeta).
         const has = !!c && normalizeDiscountType(c.discount_type) !== "ninguno" && Number(c.discount_value) > 0;
         if (discMode !== "manual") setDiscMode(has ? "empresa" : "ninguno");
     };
+    const clearCompany = () => { setCompanyId(""); setCompanySearch(""); };
+    // Lista de empresas registradas (activas, más la actual aunque no lo esté) filtrada por lo escrito en el buscador.
+    const filteredCompanies = useMemo(() => {
+        const base = companies.filter((c) => c.is_active || String(c.id) === companyId);
+        const lower = companySearch.trim().toLowerCase();
+        const list = lower
+            ? base.filter((c) => c.name.toLowerCase().includes(lower) || (c.rut && c.rut.toLowerCase().includes(lower)))
+            : base;
+        return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    }, [companies, companySearch, companyId]);
     const setLine = (i: number, patch: Partial<FormLine>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
 
     // Cambios en los controles de fechas de una línea: regeneran `dates`.
@@ -227,12 +242,53 @@ export default function QuoteForm({
 
                 <div className="p-5 space-y-5">
                     <section className="grid md:grid-cols-2 gap-3">
-                        <div>
+                        <div className="relative">
                             <label className="text-xs text-slate-500">Empresa registrada (opcional)</label>
-                            <select value={companyId} onChange={(e) => onCompany(e.target.value)} className={input}>
-                                <option value="">— Escribir a mano —</option>
-                                {companies.filter((c) => c.is_active || String(c.id) === companyId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 text-slate-400" size={15} />
+                                <input
+                                    type="text"
+                                    value={companySearch}
+                                    onChange={(e) => {
+                                        setCompanySearch(e.target.value);
+                                        setIsCompanyDropdownOpen(true);
+                                        if (companyId) setCompanyId("");
+                                    }}
+                                    onFocus={() => setIsCompanyDropdownOpen(true)}
+                                    placeholder="Buscar empresa por nombre o RUT..."
+                                    className={`${input} pl-8 ${companyId ? "border-emerald-400 bg-emerald-50" : ""}`}
+                                />
+                                {companyId && (
+                                    <button
+                                        type="button"
+                                        onClick={clearCompany}
+                                        className="absolute right-2 top-2 p-0.5 text-slate-400 hover:text-red-500"
+                                        title="Quitar empresa"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            {isCompanyDropdownOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setIsCompanyDropdownOpen(false)} />
+                                    <div className="absolute top-full left-0 w-full bg-white border border-slate-200 rounded-lg shadow-xl mt-1 z-20 max-h-60 overflow-auto">
+                                        {filteredCompanies.length > 0 ? (
+                                            filteredCompanies.map((c) => (
+                                                <div
+                                                    key={c.id}
+                                                    onClick={() => { onCompany(String(c.id)); setIsCompanyDropdownOpen(false); }}
+                                                    className="p-2.5 hover:bg-emerald-50 cursor-pointer text-sm border-b border-slate-100 last:border-0"
+                                                >
+                                                    {c.name}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="p-3 text-center text-slate-400 text-sm">No se encontraron empresas</div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <div><label className="text-xs text-slate-500">Nombre empresa *</label><input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={input} /></div>
                         <div><label className="text-xs text-slate-500">RUT</label><input value={rut} onChange={(e) => setRut(e.target.value)} className={input} placeholder="76.123.456-7" /></div>
